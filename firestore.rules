@@ -1,0 +1,523 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net (Default-Deny Catch-All)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Shared Security & Validation Primitives ---
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidDocId(id, maxLen) {
+      return id is string && id.size() >= 1 && id.size() <= maxLen && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isBootstrappedAdmin() {
+      return isEmailVerified() && request.auth.token.email == 'genipineninithin@gmail.com';
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin() ||
+        (isEmailVerified() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    function isRescueTeam() {
+      return isEmailVerified()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'rescue';
+    }
+
+    // --- Entity Validation Blueprints ---
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'email', 'role', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'uid', 'displayName', 'email', 'role',
+          'accountStatus', 'notifyEmail', 'notifySms',
+          'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.uid)
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 160
+        && data.role in ['citizen', 'rescue', 'administrator']
+        && (!('accountStatus' in data) || data.accountStatus in ['Active', 'Pending', 'Suspended'])
+        && (!('notifyEmail' in data) || data.notifyEmail is bool)
+        && (!('notifySms' in data) || data.notifySms is bool)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAdminGrant(data) {
+      return data.keys().hasAll(['uid', 'email', 'grantedBy', 'createdAt'])
+        && data.keys().hasOnly(['uid', 'email', 'grantedBy', 'createdAt'])
+        && isValidId(data.uid)
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 160
+        && isValidId(data.grantedBy)
+        && data.createdAt is timestamp;
+    }
+
+    function isValidDisasterForecast(data) {
+      return data.keys().hasAll([
+          'id', 'title', 'category', 'severity', 'region', 'horizon',
+          'confidencePct', 'metric', 'gridExposureMw', 'populationAtRisk',
+          'status', 'summary', 'visibility', 'ownerId', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'title', 'category', 'severity', 'region', 'horizon',
+          'confidencePct', 'metric', 'gridExposureMw', 'populationAtRisk',
+          'status', 'summary', 'visibility', 'ownerId', 'createdAt', 'updatedAt'
+        ])
+        && isValidDocId(data.id, 64)
+        && data.title is string && data.title.size() >= 3 && data.title.size() <= 160
+        && data.category in ['Seismic', 'Cyclone', 'Wildfire', 'Flood', 'Grid Stress']
+        && data.severity in ['Critical', 'High', 'Moderate', 'Low']
+        && data.region is string && data.region.size() >= 2 && data.region.size() <= 140
+        && data.horizon in ['6h', '24h', '72h']
+        && data.confidencePct is number && data.confidencePct >= 0 && data.confidencePct <= 100
+        && data.metric is string && data.metric.size() >= 1 && data.metric.size() <= 80
+        && data.gridExposureMw is number && data.gridExposureMw >= 0
+        && data.populationAtRisk is string && data.populationAtRisk.size() >= 1 && data.populationAtRisk.size() <= 40
+        && data.status in ['Monitoring', 'Warning', 'Escalated']
+        && data.summary is string && data.summary.size() >= 5 && data.summary.size() <= 400
+        && data.visibility == 'public'
+        && isValidId(data.ownerId)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidCyberThreat(data) {
+      return data.keys().hasAll([
+          'id', 'title', 'vector', 'severity', 'platform', 'mitreId',
+          'ioc', 'affectedHosts', 'status', 'summary', 'ownerId', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'title', 'vector', 'severity', 'platform', 'mitreId',
+          'ioc', 'affectedHosts', 'status', 'linkedDisasterId', 'summary',
+          'ownerId', 'createdAt', 'updatedAt'
+        ])
+        && isValidDocId(data.id, 64)
+        && data.title is string && data.title.size() >= 3 && data.title.size() <= 160
+        && data.vector in ['OT / SCADA', 'Ransomware', 'Volumetric DDoS', 'Zero-Day', 'Phishing']
+        && data.severity in ['Critical', 'High', 'Moderate', 'Low']
+        && data.platform in ['Windows Server', 'Windows 11', 'Android Field', 'iOS Responder', 'OT / SCADA']
+        && data.mitreId is string && data.mitreId.size() >= 2 && data.mitreId.size() <= 24
+        && data.ioc is string && data.ioc.size() >= 2 && data.ioc.size() <= 160
+        && data.affectedHosts is number && data.affectedHosts >= 0
+        && data.status in ['Active', 'Mitigating', 'Contained']
+        && (!('linkedDisasterId' in data) || isValidDocId(data.linkedDisasterId, 64))
+        && data.summary is string && data.summary.size() >= 5 && data.summary.size() <= 400
+        && isValidId(data.ownerId)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidIncidentTicket(data) {
+      return data.keys().hasAll([
+          'id', 'title', 'domain', 'severity', 'region', 'assignedUnit',
+          'platformSupport', 'status', 'notes', 'visibility', 'reporterId',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'title', 'domain', 'severity', 'region', 'assignedUnit',
+          'platformSupport', 'status', 'notes', 'visibility', 'reporterId',
+          'locationCoords', 'imageSummary', 'verifiedByAdmin', 'casualtiesCount',
+          'exposedPopulation', 'triagePriority', 'patientTransferNote', 'damageAssessment',
+          'createdAt', 'updatedAt'
+        ])
+        && isValidDocId(data.id, 64)
+        && data.title is string && data.title.size() >= 3 && data.title.size() <= 160
+        && data.domain in ['Disaster', 'Cyber', 'Hybrid Nexus']
+        && data.severity in ['Critical', 'High', 'Moderate', 'Low']
+        && data.region is string && data.region.size() >= 2 && data.region.size() <= 140
+        && data.assignedUnit is string && data.assignedUnit.size() >= 2 && data.assignedUnit.size() <= 120
+        && data.platformSupport in ['Windows & Mobile', 'Windows Desktop', 'Mobile Field']
+        && data.status in ['Dispatched', 'In Progress', 'Contained', 'Resolved']
+        && data.notes is string && data.notes.size() >= 3 && data.notes.size() <= 500
+        && data.visibility in ['public', 'admin_only']
+        && isValidId(data.reporterId)
+        && (!('locationCoords' in data) || (data.locationCoords is string && data.locationCoords.size() >= 1 && data.locationCoords.size() <= 80))
+        && (!('imageSummary' in data) || (data.imageSummary is string && data.imageSummary.size() >= 1 && data.imageSummary.size() <= 240))
+        && (!('verifiedByAdmin' in data) || data.verifiedByAdmin is bool)
+        && (!('casualtiesCount' in data) || (data.casualtiesCount is number && data.casualtiesCount >= 0))
+        && (!('exposedPopulation' in data) || (data.exposedPopulation is number && data.exposedPopulation >= 0))
+        && (!('triagePriority' in data) || data.triagePriority in ['Red - Immediate', 'Yellow - Delayed', 'Green - Minor'])
+        && (!('patientTransferNote' in data) || (data.patientTransferNote is string && data.patientTransferNote.size() >= 1 && data.patientTransferNote.size() <= 240))
+        && (!('damageAssessment' in data) || (data.damageAssessment is string && data.damageAssessment.size() >= 1 && data.damageAssessment.size() <= 400))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidReliefResource(data) {
+      return data.keys().hasAll([
+          'id', 'kind', 'name', 'region', 'status', 'quantity', 'unit',
+          'contact', 'allocatedTo', 'visibility', 'updatedBy', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'kind', 'name', 'region', 'status', 'quantity', 'unit',
+          'contact', 'allocatedTo', 'visibility', 'updatedBy', 'createdAt', 'updatedAt'
+        ])
+        && isValidDocId(data.id, 64)
+        && data.kind in ['Hospital', 'Shelter', 'Supply', 'Vehicle']
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 160
+        && data.region is string && data.region.size() >= 2 && data.region.size() <= 140
+        && data.status in ['Available', 'Limited', 'Deployed', 'Full']
+        && data.quantity is number && data.quantity >= 0
+        && data.unit is string && data.unit.size() >= 1 && data.unit.size() <= 60
+        && data.contact is string && data.contact.size() >= 2 && data.contact.size() <= 100
+        && data.allocatedTo is string && data.allocatedTo.size() >= 1 && data.allocatedTo.size() <= 140
+        && data.visibility == 'public'
+        && isValidId(data.updatedBy)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAlertNotification(data) {
+      return data.keys().hasAll([
+          'id', 'title', 'category', 'severity', 'channel', 'message',
+          'region', 'status', 'visibility', 'authorId', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'title', 'category', 'severity', 'channel', 'message',
+          'region', 'status', 'visibility', 'authorId', 'createdAt', 'updatedAt'
+        ])
+        && isValidDocId(data.id, 64)
+        && data.title is string && data.title.size() >= 3 && data.title.size() <= 160
+        && data.category in ['Emergency', 'Disaster', 'Cybersecurity', 'Rescue Op']
+        && data.severity in ['Critical', 'High', 'Moderate', 'Low']
+        && data.channel in ['All', 'Email & SMS', 'Rescue Dispatch']
+        && data.message is string && data.message.size() >= 5 && data.message.size() <= 400
+        && data.region is string && data.region.size() >= 2 && data.region.size() <= 140
+        && data.status in ['Draft', 'Verified', 'Published']
+        && data.visibility in ['public', 'rescue_only', 'admin_only']
+        && isValidId(data.authorId)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAiKnowledge(data) {
+      return data.keys().hasAll(['id', 'topic', 'category', 'guidance', 'language', 'authorId', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'topic', 'category', 'guidance', 'language', 'authorId', 'createdAt', 'updatedAt'])
+        && isValidDocId(data.id, 64)
+        && data.topic is string && data.topic.size() >= 3 && data.topic.size() <= 160
+        && data.category in ['Disaster', 'First Aid', 'Cybersecurity', 'Checklist']
+        && data.guidance is string && data.guidance.size() >= 5 && data.guidance.size() <= 600
+        && data.language is string && data.language.size() >= 2 && data.language.size() <= 40
+        && isValidId(data.authorId)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSystemConfig(data) {
+      return data.keys().hasAll([
+          'id', 'aiModel', 'usgsFeedEnabled', 'autoEscalationThreshold',
+          'smsGatewayEnabled', 'emailGatewayEnabled', 'auditRetentionDays', 'updatedBy', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'aiModel', 'usgsFeedEnabled', 'autoEscalationThreshold',
+          'smsGatewayEnabled', 'emailGatewayEnabled', 'auditRetentionDays', 'updatedBy', 'updatedAt'
+        ])
+        && isValidDocId(data.id, 64)
+        && data.aiModel is string && data.aiModel.size() >= 3 && data.aiModel.size() <= 80
+        && data.usgsFeedEnabled is bool
+        && data.autoEscalationThreshold in ['Critical', 'High']
+        && data.smsGatewayEnabled is bool
+        && data.emailGatewayEnabled is bool
+        && data.auditRetentionDays is number && data.auditRetentionDays >= 1 && data.auditRetentionDays <= 3650
+        && isValidId(data.updatedBy)
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAuditLog(data) {
+      return data.keys().hasAll(['id', 'actorUid', 'actorEmail', 'actorRole', 'action', 'target', 'detail', 'createdAt'])
+        && data.keys().hasOnly(['id', 'actorUid', 'actorEmail', 'actorRole', 'action', 'target', 'detail', 'createdAt'])
+        && isValidDocId(data.id, 64)
+        && isValidId(data.actorUid)
+        && data.actorEmail is string && data.actorEmail.size() >= 3 && data.actorEmail.size() <= 160
+        && data.actorRole in ['citizen', 'rescue', 'administrator']
+        && data.action is string && data.action.size() >= 2 && data.action.size() <= 100
+        && data.target is string && data.target.size() >= 1 && data.target.size() <= 120
+        && data.detail is string && data.detail.size() >= 2 && data.detail.size() <= 300
+        && data.createdAt is timestamp;
+    }
+
+    // --- Collection Rules ---
+
+    // 1. User Profiles
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isBootstrappedAdmin();
+      allow create: if isEmailVerified()
+        && isValidId(userId)
+        && isValidUserProfile(incoming())
+        && incoming().uid == request.auth.uid
+        && incoming().uid == userId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && ((isOwner(userId) && incoming().role in ['citizen', 'rescue']) || isAdmin());
+      allow update: if isEmailVerified()
+        && isValidId(userId)
+        && isValidUserProfile(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (
+            isOwner(userId)
+            && incoming().email == existing().email
+            && (
+              (incoming().role == existing().role && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'notifyEmail', 'notifySms', 'updatedAt'])) ||
+              (existing().role in ['citizen', 'rescue'] && incoming().role in ['citizen', 'rescue'] && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'role', 'notifyEmail', 'notifySms', 'updatedAt']))
+            )
+          ) ||
+          isAdmin()
+        );
+      allow delete: if isValidId(userId) && isAdmin();
+    }
+
+    // 2. Administrator Grants
+    match /admins/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isBootstrappedAdmin();
+      allow create: if isEmailVerified()
+        && isValidId(userId)
+        && isValidAdminGrant(incoming())
+        && incoming().uid == userId
+        && incoming().grantedBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && isAdmin();
+      allow update: if isEmailVerified()
+        && isValidId(userId)
+        && isValidAdminGrant(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['email', 'grantedBy'])
+        && isAdmin();
+      allow delete: if isValidId(userId) && isAdmin();
+    }
+
+    // 3. Disaster Prediction & Monitoring Feeds
+    match /disasters/{forecastId} {
+      allow get: if isSignedIn() && isValidDocId(forecastId, 64) && (existing().visibility == 'public' || isAdmin());
+      allow list: if isSignedIn() && (existing().visibility == 'public' || isBootstrappedAdmin());
+      allow create: if isEmailVerified()
+        && isValidDocId(forecastId, 64)
+        && isValidDisasterForecast(incoming())
+        && incoming().id == forecastId
+        && incoming().ownerId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && isAdmin();
+      allow update: if isEmailVerified()
+        && isValidDocId(forecastId, 64)
+        && isValidDisasterForecast(incoming())
+        && incoming().id == existing().id
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (existing().status != 'Escalated' || isAdmin())
+        && isAdmin();
+      allow delete: if isValidDocId(forecastId, 64) && isAdmin();
+    }
+
+    // 4. Cybersecurity & Threat Detection (Administrator Only)
+    match /threats/{threatId} {
+      allow get: if isValidDocId(threatId, 64) && isAdmin();
+      allow list: if isBootstrappedAdmin();
+      allow create: if isEmailVerified()
+        && isValidDocId(threatId, 64)
+        && isValidCyberThreat(incoming())
+        && incoming().id == threatId
+        && incoming().ownerId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && isAdmin();
+      allow update: if isEmailVerified()
+        && isValidDocId(threatId, 64)
+        && isValidCyberThreat(incoming())
+        && incoming().id == existing().id
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (existing().status != 'Contained' || isAdmin())
+        && isAdmin();
+      allow delete: if isValidDocId(threatId, 64) && isAdmin();
+    }
+
+    // 5. Emergency Response & Incident Management
+    match /incidents/{incidentId} {
+      allow get: if isSignedIn()
+        && isValidDocId(incidentId, 64)
+        && (existing().visibility == 'public' || existing().reporterId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn()
+        && (isBootstrappedAdmin() || existing().visibility == 'public' || existing().reporterId == request.auth.uid);
+      allow create: if isEmailVerified()
+        && isValidDocId(incidentId, 64)
+        && isValidIncidentTicket(incoming())
+        && incoming().id == incidentId
+        && incoming().reporterId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (
+          (
+            incoming().status == 'Dispatched'
+            && incoming().visibility == 'public'
+            && incoming().domain in ['Disaster', 'Hybrid Nexus']
+          ) ||
+          isAdmin()
+        );
+      allow update: if isEmailVerified()
+        && isValidDocId(incidentId, 64)
+        && isValidIncidentTicket(incoming())
+        && incoming().id == existing().id
+        && incoming().reporterId == existing().reporterId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (existing().status != 'Resolved' || isAdmin())
+        && (
+          (
+            existing().reporterId == request.auth.uid
+            && incoming().status == existing().status
+            && incoming().diff(existing()).affectedKeys().hasOnly(['notes', 'updatedAt'])
+          ) ||
+          (
+            existing().visibility == 'public'
+            && incoming().visibility == existing().visibility
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'status', 'notes', 'triagePriority', 'patientTransferNote', 'updatedAt'
+            ])
+            && isRescueTeam()
+          ) ||
+          isAdmin()
+        );
+      allow delete: if isValidDocId(incidentId, 64) && isAdmin();
+    }
+
+    // 6. Rescue & Relief Resources
+    match /relief_resources/{resourceId} {
+      allow get: if isSignedIn() && isValidDocId(resourceId, 64) && (existing().visibility == 'public' || isAdmin());
+      allow list: if isSignedIn() && (existing().visibility == 'public' || isBootstrappedAdmin());
+      allow create: if isEmailVerified()
+        && isValidDocId(resourceId, 64)
+        && isValidReliefResource(incoming())
+        && incoming().id == resourceId
+        && incoming().updatedBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && isAdmin();
+      allow update: if isEmailVerified()
+        && isValidDocId(resourceId, 64)
+        && isValidReliefResource(incoming())
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedBy == request.auth.uid
+        && incoming().updatedAt == request.time
+        && (
+          (
+            incoming().kind == existing().kind
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'quantity', 'allocatedTo', 'updatedBy', 'updatedAt'])
+            && isRescueTeam()
+          ) ||
+          isAdmin()
+        );
+      allow delete: if isValidDocId(resourceId, 64) && isAdmin();
+    }
+
+    // 7. Secure Alert & Notification System
+    match /alerts/{alertId} {
+      allow get: if isSignedIn()
+        && isValidDocId(alertId, 64)
+        && (existing().visibility == 'public' || (existing().visibility == 'rescue_only' && isRescueTeam()) || isAdmin());
+      allow list: if isSignedIn()
+        && (isBootstrappedAdmin() || existing().visibility == 'public' || existing().visibility == 'rescue_only');
+      allow create: if isEmailVerified()
+        && isValidDocId(alertId, 64)
+        && isValidAlertNotification(incoming())
+        && incoming().id == alertId
+        && incoming().authorId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && isAdmin();
+      allow update: if isEmailVerified()
+        && isValidDocId(alertId, 64)
+        && isValidAlertNotification(incoming())
+        && incoming().id == existing().id
+        && incoming().authorId == existing().authorId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && isAdmin();
+      allow delete: if isValidDocId(alertId, 64) && isAdmin();
+    }
+
+    // 8. AI Knowledge Base
+    match /ai_knowledge/{entryId} {
+      allow get: if isSignedIn() && isValidDocId(entryId, 64);
+      allow list: if isSignedIn() && (isBootstrappedAdmin() || existing().category in ['Disaster', 'First Aid', 'Cybersecurity', 'Checklist']);
+      allow create: if isEmailVerified()
+        && isValidDocId(entryId, 64)
+        && isValidAiKnowledge(incoming())
+        && incoming().id == entryId
+        && incoming().authorId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && isAdmin();
+      allow update: if isEmailVerified()
+        && isValidDocId(entryId, 64)
+        && isValidAiKnowledge(incoming())
+        && incoming().id == existing().id
+        && incoming().authorId == existing().authorId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && isAdmin();
+      allow delete: if isValidDocId(entryId, 64) && isAdmin();
+    }
+
+    // 9. System Config & Immutable Audit Logs
+    match /system_config/{configId} {
+      allow get: if isValidDocId(configId, 64) && isAdmin();
+      allow list: if isBootstrappedAdmin();
+      allow create, update: if isEmailVerified()
+        && isValidDocId(configId, 64)
+        && isValidSystemConfig(incoming())
+        && incoming().id == configId
+        && incoming().updatedBy == request.auth.uid
+        && incoming().updatedAt == request.time
+        && isAdmin();
+      allow delete: if isValidDocId(configId, 64) && isAdmin();
+    }
+
+    match /audit_logs/{logId} {
+      allow get: if isValidDocId(logId, 64) && isAdmin();
+      allow list: if isBootstrappedAdmin();
+      allow create: if isEmailVerified()
+        && isValidDocId(logId, 64)
+        && isValidAuditLog(incoming())
+        && incoming().id == logId
+        && incoming().actorUid == request.auth.uid
+        && incoming().createdAt == request.time;
+      allow update, delete: if false;
+    }
+  }
+}

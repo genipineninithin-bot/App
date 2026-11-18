@@ -1,0 +1,321 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated Nexora ai user profile with RBAC role assignment and notification preferences.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Authentication user UID."
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Operator or citizen display name."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "minLength": 3,
+          "maxLength": 160,
+          "description": "Verified account email address."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["citizen", "rescue", "administrator"],
+          "description": "Access portal role."
+        },
+        "accountStatus": {
+          "type": "string",
+          "enum": ["Active", "Pending", "Suspended"],
+          "description": "Admin approval and account status."
+        },
+        "notifyEmail": {
+          "type": "boolean",
+          "description": "Opt-in for email emergency notifications."
+        },
+        "notifySms": {
+          "type": "boolean",
+          "description": "Opt-in for SMS emergency notifications."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server last update timestamp."
+        }
+      },
+      "required": ["uid", "displayName", "email", "role", "createdAt", "updatedAt"]
+    },
+    "AdminGrant": {
+      "title": "AdminGrant",
+      "description": "Trusted administrator authorization record keyed by UID.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Authorized administrator Firebase UID."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "minLength": 3,
+          "maxLength": 160,
+          "description": "Administrator email address."
+        },
+        "grantedBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of the granting administrator."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        }
+      },
+      "required": ["uid", "email", "grantedBy", "createdAt"]
+    },
+    "DisasterForecast": {
+      "title": "DisasterForecast",
+      "description": "Real-time hazard prediction and grid impact telemetry record.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "category": { "type": "string", "enum": ["Seismic", "Cyclone", "Wildfire", "Flood", "Grid Stress"] },
+        "severity": { "type": "string", "enum": ["Critical", "High", "Moderate", "Low"] },
+        "region": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "horizon": { "type": "string", "enum": ["6h", "24h", "72h"] },
+        "confidencePct": { "type": "number" },
+        "metric": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "gridExposureMw": { "type": "number" },
+        "populationAtRisk": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "status": { "type": "string", "enum": ["Monitoring", "Warning", "Escalated"] },
+        "summary": { "type": "string", "minLength": 5, "maxLength": 400 },
+        "visibility": { "type": "string", "enum": ["public"] },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id", "title", "category", "severity", "region", "horizon", "confidencePct",
+        "metric", "gridExposureMw", "populationAtRisk", "status", "summary",
+        "visibility", "ownerId", "createdAt", "updatedAt"
+      ]
+    },
+    "CyberThreat": {
+      "title": "CyberThreat",
+      "description": "Administrator-only cybersecurity intrusion vector and containment state.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "vector": { "type": "string", "enum": ["OT / SCADA", "Ransomware", "Volumetric DDoS", "Zero-Day", "Phishing"] },
+        "severity": { "type": "string", "enum": ["Critical", "High", "Moderate", "Low"] },
+        "platform": { "type": "string", "enum": ["Windows Server", "Windows 11", "Android Field", "iOS Responder", "OT / SCADA"] },
+        "mitreId": { "type": "string", "minLength": 2, "maxLength": 24 },
+        "ioc": { "type": "string", "minLength": 2, "maxLength": 160 },
+        "affectedHosts": { "type": "number" },
+        "status": { "type": "string", "enum": ["Active", "Mitigating", "Contained"] },
+        "linkedDisasterId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "summary": { "type": "string", "minLength": 5, "maxLength": 400 },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id", "title", "vector", "severity", "platform", "mitreId", "ioc",
+        "affectedHosts", "status", "summary", "ownerId", "createdAt", "updatedAt"
+      ]
+    },
+    "IncidentTicket": {
+      "title": "IncidentTicket",
+      "description": "Emergency response dispatch or citizen SOS report ticket.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "domain": { "type": "string", "enum": ["Disaster", "Cyber", "Hybrid Nexus"] },
+        "severity": { "type": "string", "enum": ["Critical", "High", "Moderate", "Low"] },
+        "region": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "assignedUnit": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "platformSupport": { "type": "string", "enum": ["Windows & Mobile", "Windows Desktop", "Mobile Field"] },
+        "status": { "type": "string", "enum": ["Dispatched", "In Progress", "Contained", "Resolved"] },
+        "notes": { "type": "string", "minLength": 3, "maxLength": 500 },
+        "visibility": { "type": "string", "enum": ["public", "admin_only"] },
+        "reporterId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "locationCoords": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "imageSummary": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "verifiedByAdmin": { "type": "boolean" },
+        "casualtiesCount": { "type": "number" },
+        "exposedPopulation": { "type": "number" },
+        "triagePriority": { "type": "string", "enum": ["Red - Immediate", "Yellow - Delayed", "Green - Minor"] },
+        "patientTransferNote": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "damageAssessment": { "type": "string", "minLength": 1, "maxLength": 400 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id", "title", "domain", "severity", "region", "assignedUnit",
+        "platformSupport", "status", "notes", "visibility", "reporterId",
+        "createdAt", "updatedAt"
+      ]
+    },
+    "ReliefResource": {
+      "title": "ReliefResource",
+      "description": "Hospital, shelter, relief supply, and ambulance/rescue vehicle record.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "kind": { "type": "string", "enum": ["Hospital", "Shelter", "Supply", "Vehicle"] },
+        "name": { "type": "string", "minLength": 2, "maxLength": 160 },
+        "region": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "status": { "type": "string", "enum": ["Available", "Limited", "Deployed", "Full"] },
+        "quantity": { "type": "number" },
+        "unit": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "contact": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "allocatedTo": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "visibility": { "type": "string", "enum": ["public"] },
+        "updatedBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id", "kind", "name", "region", "status", "quantity", "unit",
+        "contact", "allocatedTo", "visibility", "updatedBy", "createdAt", "updatedAt"
+      ]
+    },
+    "AlertNotification": {
+      "title": "AlertNotification",
+      "description": "Published or verified emergency, disaster, cybersecurity, and rescue alerts.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "category": { "type": "string", "enum": ["Emergency", "Disaster", "Cybersecurity", "Rescue Op"] },
+        "severity": { "type": "string", "enum": ["Critical", "High", "Moderate", "Low"] },
+        "channel": { "type": "string", "enum": ["All", "Email & SMS", "Rescue Dispatch"] },
+        "message": { "type": "string", "minLength": 5, "maxLength": 400 },
+        "region": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "status": { "type": "string", "enum": ["Draft", "Verified", "Published"] },
+        "visibility": { "type": "string", "enum": ["public", "rescue_only", "admin_only"] },
+        "authorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id", "title", "category", "severity", "channel", "message",
+        "region", "status", "visibility", "authorId", "createdAt", "updatedAt"
+      ]
+    },
+    "AiKnowledgeEntry": {
+      "title": "AiKnowledgeEntry",
+      "description": "Admin-managed AI safety and response knowledge-base entry.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "topic": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "category": { "type": "string", "enum": ["Disaster", "First Aid", "Cybersecurity", "Checklist"] },
+        "guidance": { "type": "string", "minLength": 5, "maxLength": 600 },
+        "language": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "authorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "topic", "category", "guidance", "language", "authorId", "createdAt", "updatedAt"]
+    },
+    "SystemConfig": {
+      "title": "SystemConfig",
+      "description": "Platform configuration, AI model routing, and external data-source flags.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "aiModel": { "type": "string", "minLength": 3, "maxLength": 80 },
+        "usgsFeedEnabled": { "type": "boolean" },
+        "autoEscalationThreshold": { "type": "string", "enum": ["Critical", "High"] },
+        "smsGatewayEnabled": { "type": "boolean" },
+        "emailGatewayEnabled": { "type": "boolean" },
+        "auditRetentionDays": { "type": "number" },
+        "updatedBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id", "aiModel", "usgsFeedEnabled", "autoEscalationThreshold",
+        "smsGatewayEnabled", "emailGatewayEnabled", "auditRetentionDays", "updatedBy", "updatedAt"
+      ]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Append-only security and governance audit trail.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorEmail": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "actorRole": { "type": "string", "enum": ["citizen", "rescue", "administrator"] },
+        "action": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "target": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "detail": { "type": "string", "minLength": 2, "maxLength": 300 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "actorUid", "actorEmail", "actorRole", "action", "target", "detail", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Authenticated user profile documents (PII isolated to owner or administrator)."
+    },
+    "/admins/{userId}": {
+      "schema": { "$ref": "#/entities/AdminGrant" },
+      "description": "Administrator clearance registry."
+    },
+    "/disasters/{forecastId}": {
+      "schema": { "$ref": "#/entities/DisasterForecast" },
+      "description": "Shared hazard monitoring & prediction feeds."
+    },
+    "/threats/{threatId}": {
+      "schema": { "$ref": "#/entities/CyberThreat" },
+      "description": "Administrator-only cyber threat and IOC telemetry."
+    },
+    "/incidents/{incidentId}": {
+      "schema": { "$ref": "#/entities/IncidentTicket" },
+      "description": "Emergency response dispatch tickets and citizen SOS reports."
+    },
+    "/relief_resources/{resourceId}": {
+      "schema": { "$ref": "#/entities/ReliefResource" },
+      "description": "Hospitals, shelters, relief supplies, and emergency vehicle tracking."
+    },
+    "/alerts/{alertId}": {
+      "schema": { "$ref": "#/entities/AlertNotification" },
+      "description": "Secure emergency, disaster, cyber, and rescue notifications."
+    },
+    "/ai_knowledge/{entryId}": {
+      "schema": { "$ref": "#/entities/AiKnowledgeEntry" },
+      "description": "Admin-managed AI preparedness and response knowledge base."
+    },
+    "/system_config/{configId}": {
+      "schema": { "$ref": "#/entities/SystemConfig" },
+      "description": "System and AI model configuration."
+    },
+    "/audit_logs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Immutable security and platform activity logs."
+    }
+  }
+}

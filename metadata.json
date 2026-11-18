@@ -1,0 +1,6 @@
+{
+  "name": "AegisGrid",
+  "description": "Next-generation disaster intelligence and cybersecurity operations platform for Windows and Mobile.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

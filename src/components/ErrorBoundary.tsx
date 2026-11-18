@@ -50,7 +50,7 @@ export class ErrorBoundary extends React.Component<
             <div className="flex items-center gap-3 text-red-400">
               <AlertTriangle className="w-5 h-5 shrink-0" aria-hidden="true" />
               <h1 className="font-display text-base font-semibold text-slate-100">
-                Nexora ai Operational Notice
+                NEXORA AI Operational Notice
               </h1>
             </div>
             <p className="text-xs text-slate-300 leading-relaxed break-words">

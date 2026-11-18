@@ -22,6 +22,11 @@ import {
   UserRole,
 } from '../../types/modules';
 import { TacticalGlobe3D } from '../TacticalGlobe3D';
+import {
+  plainIncidentDomain,
+  plainIncidentStatus,
+  plainSeverity,
+} from '../../utils/plainLabels';
 
 interface ResponseModuleProps {
   incidents: IncidentTicket[];
@@ -88,6 +93,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
   const [title, setTitle] = useState('');
   const [region, setRegion] = useState('');
   const [locationCoords, setLocationCoords] = useState('');
+  const [gpsNotice, setGpsNotice] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
   const [domain, setDomain] = useState<IncidentTicket['domain']>('Disaster');
   const [severity, setSeverity] = useState<Severity>('High');
@@ -130,16 +136,18 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
   }, [incidents]);
 
   const handleLocateMe = () => {
+    setGpsNotice(null);
     if (!navigator.geolocation) {
-      setLocationCoords('38.2682° N, 140.8694° E');
+      setGpsNotice('Location access is not supported here. Please type your city or street address.');
       return;
     }
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        setGpsNotice(null);
         setLocationCoords(`${pos.coords.latitude.toFixed(4)}°, ${pos.coords.longitude.toFixed(4)}°`);
       },
       () => {
-        setLocationCoords('38.2682° N, 140.8694° E');
+        setGpsNotice('Could not read your GPS location. Please type your city or street address above.');
       },
       { timeout: 4000 }
     );
@@ -294,9 +302,9 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
 
   const nextActionLabel = (status: IncidentTicket['status']) => {
     if (!canAdvanceStatus) return null;
-    if (status === 'Dispatched') return { label: 'Mark In Progress', next: 'In Progress' as const };
-    if (status === 'In Progress') return { label: 'Mark Contained', next: 'Contained' as const };
-    if (status === 'Contained') return { label: 'Resolve Incident', next: 'Resolved' as const };
+    if (status === 'Dispatched') return { label: 'Start Rescue Work', next: 'In Progress' as const };
+    if (status === 'In Progress') return { label: 'Mark Under Control', next: 'Contained' as const };
+    if (status === 'Contained') return { label: 'Mark Completed', next: 'Resolved' as const };
     return null;
   };
 
@@ -307,12 +315,12 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
         <div className="flex flex-wrap items-center gap-4 text-xs text-slate-300">
           <span className="inline-flex items-center gap-1.5">
             <Monitor className="w-4 h-4 text-sky-400" aria-hidden="true" />
-            <span>Windows SOC Consoles Ready</span>
+            <span>Desktop Dispatch Ready</span>
           </span>
           <span className="text-slate-600" aria-hidden="true">·</span>
           <span className="inline-flex items-center gap-1.5">
             <Smartphone className="w-4 h-4 text-blue-400" aria-hidden="true" />
-            <span>Mobile Responder Uplink Active</span>
+            <span>Mobile Field Teams Connected</span>
           </span>
         </div>
 
@@ -327,7 +335,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
             }`}
           >
             <Globe className="w-4 h-4 text-blue-400" aria-hidden="true" />
-            <span>{show3DMap ? 'Hide 3D Incident Map' : '3D Incident Map'}</span>
+            <span>{show3DMap ? 'Hide 3D Map' : 'Open 3D Map'}</span>
           </button>
 
           <button
@@ -336,7 +344,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
             className="min-h-[40px] px-3.5 py-2 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center gap-1.5 whitespace-nowrap"
           >
             <Plus className="w-4 h-4" aria-hidden="true" />
-            <span>{showForm ? 'Close Form' : isAdmin ? 'Dispatch Incident' : 'Report Emergency'}</span>
+            <span>{showForm ? 'Close Form' : isAdmin ? 'Send Rescue Team' : 'Report an Emergency'}</span>
           </button>
         </div>
       </div>
@@ -344,23 +352,23 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
       {/* Incident Status KPI Strip */}
       <div className="grid grid-cols-2 sm:grid-cols-5 border border-slate-800 rounded-xl bg-[#0A0F1A] divide-y sm:divide-y-0 sm:divide-x divide-slate-800">
         <div className="p-3">
-          <div className="text-[11px] text-slate-400">Total Reports</div>
+          <div className="text-[11px] text-slate-400">All Reports</div>
           <div className="font-display text-lg font-bold tabular-nums text-slate-100">{summary.total}</div>
         </div>
         <div className="p-3">
-          <div className="text-[11px] text-slate-400">Active / Pending</div>
+          <div className="text-[11px] text-slate-400">Help Needed Now</div>
           <div className="font-display text-lg font-bold tabular-nums text-amber-400">{summary.pending}</div>
         </div>
         <div className="p-3">
-          <div className="text-[11px] text-slate-400">Admin Verified</div>
+          <div className="text-[11px] text-slate-400">Verified Safe/Real</div>
           <div className="font-display text-lg font-bold tabular-nums text-emerald-400">{summary.verified}</div>
         </div>
         <div className="p-3">
-          <div className="text-[11px] text-slate-400">Rejected</div>
+          <div className="text-[11px] text-slate-400">Closed / Rejected</div>
           <div className="font-display text-lg font-bold tabular-nums text-red-400">{summary.rejected}</div>
         </div>
         <div className="p-3">
-          <div className="text-[11px] text-slate-400">Resolved</div>
+          <div className="text-[11px] text-slate-400">Completed</div>
           <div className="font-display text-lg font-bold tabular-nums text-blue-400">{summary.resolved}</div>
         </div>
       </div>
@@ -387,7 +395,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Emergency / incident title"
+              placeholder="What happened? (e.g., Flooded street, fallen tree)"
               required
               minLength={3}
               className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100"
@@ -396,7 +404,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
               type="text"
               value={region}
               onChange={(e) => setRegion(e.target.value)}
-              placeholder="Affected region / neighborhood"
+              placeholder="City, town, or neighborhood"
               required
               minLength={2}
               className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100"
@@ -409,17 +417,17 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
                 type="text"
                 value={locationCoords}
                 onChange={(e) => setLocationCoords(e.target.value)}
-                placeholder="GPS coordinates"
+                placeholder="GPS location (optional)"
                 className="flex-1 min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100"
               />
               <button
                 type="button"
                 onClick={handleLocateMe}
-                title="Capture GPS location"
+                title="Use my current location"
                 className="min-h-[40px] px-3 rounded-lg border border-slate-700 text-xs text-slate-200 hover:bg-slate-800 inline-flex items-center gap-1 shrink-0"
               >
                 <MapPin className="w-3.5 h-3.5 text-blue-400" aria-hidden="true" />
-                <span>GPS</span>
+                <span>My Location</span>
               </button>
             </div>
 
@@ -428,9 +436,9 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
               onChange={(e) => setDomain(e.target.value as IncidentTicket['domain'])}
               className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-200"
             >
-              <option value="Disaster">Disaster</option>
-              <option value="Hybrid Nexus">Hybrid Nexus</option>
-              {isAdmin && <option value="Cyber">Cyber</option>}
+              <option value="Disaster">Disaster / Weather</option>
+              <option value="Hybrid Nexus">Disaster &amp; Power Outage</option>
+              {isAdmin && <option value="Cyber">Online / Cyber Attack</option>}
             </select>
 
             <select
@@ -438,12 +446,16 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
               onChange={(e) => setSeverity(e.target.value as Severity)}
               className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-200"
             >
-              <option value="Critical">Critical</option>
-              <option value="High">High</option>
-              <option value="Moderate">Moderate</option>
-              <option value="Low">Low</option>
+              <option value="Critical">Danger Now (Urgent)</option>
+              <option value="High">High Risk</option>
+              <option value="Moderate">Medium Risk</option>
+              <option value="Low">Low Risk</option>
             </select>
           </div>
+
+          {gpsNotice && (
+            <div className="text-[11px] text-amber-300">{gpsNotice}</div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <select
@@ -453,16 +465,16 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
               }
               className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-200"
             >
-              <option value="Windows & Mobile">Windows &amp; Mobile</option>
-              <option value="Windows Desktop">Windows Desktop</option>
-              <option value="Mobile Field">Mobile Field</option>
+              <option value="Windows & Mobile">All Teams (Office &amp; Field)</option>
+              <option value="Windows Desktop">Command Desk</option>
+              <option value="Mobile Field">Mobile Rescue Team</option>
             </select>
 
             <label className="min-h-[40px] px-3 rounded-lg border border-slate-700 bg-[#0D1422] text-xs text-slate-300 flex items-center justify-between cursor-pointer hover:border-blue-500">
               <span className="inline-flex items-center gap-1.5 truncate">
                 <Camera className="w-3.5 h-3.5 text-blue-400 shrink-0" aria-hidden="true" />
                 <span className="truncate">
-                  {imageFileName ? imageFileName : 'Upload field photo / satellite snap'}
+                  {imageFileName ? imageFileName : 'Add a photo (optional)'}
                 </span>
               </span>
               <input
@@ -478,7 +490,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
             rows={2}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="Describe casualties, structural damage, road blockages, or urgent rescue needs..."
+            placeholder="Tell us who needs help, blocked roads, or damage nearby..."
             className="w-full p-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100"
           />
 
@@ -487,7 +499,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
               type="submit"
               className="min-h-[40px] px-4 py-2 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700"
             >
-              Submit Report &amp; Track
+              Send Emergency Report
             </button>
           </div>
         </form>
@@ -495,7 +507,12 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
 
       {/* Incident Queue & Role-Scoped Operational Drawer */}
       <div className="divide-y divide-slate-800 border border-slate-800 rounded-xl bg-[#0A0F1A] overflow-hidden">
-        {incidents.map((inc) => {
+        {incidents.length === 0 ? (
+          <div className="p-6 text-center text-xs text-slate-400">
+            No emergency reports right now. Use &ldquo;Report an Emergency&rdquo; above if someone needs help.
+          </div>
+        ) : (
+          incidents.map((inc) => {
           const action = nextActionLabel(inc.status);
           const expanded = selectedId === inc.id;
           return (
@@ -505,7 +522,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
                   <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
                     <span className="font-mono text-slate-300">{inc.id}</span>
                     <span aria-hidden="true">·</span>
-                    <span>{inc.domain}</span>
+                    <span>{plainIncidentDomain(inc.domain)}</span>
                     <span aria-hidden="true">·</span>
                     <span
                       className={`font-semibold ${
@@ -516,10 +533,10 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
                           : 'text-sky-400'
                       }`}
                     >
-                      {inc.severity}
+                      {plainSeverity(inc.severity)}
                     </span>
                     <span aria-hidden="true">·</span>
-                    <span className="text-blue-400">{inc.status}</span>
+                    <span className="text-blue-400">{plainIncidentStatus(inc.status)}</span>
                     {inc.verifiedByAdmin && (
                       <>
                         <span aria-hidden="true">·</span>
@@ -549,7 +566,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
                       </>
                     )}
                     <span aria-hidden="true">·</span>
-                    <span>Unit: {inc.assignedUnit}</span>
+                    <span>Team: {inc.assignedUnit}</span>
                     <span aria-hidden="true">·</span>
                     <span>Updated {inc.updatedAt}</span>
                   </div>
@@ -562,7 +579,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
                       onClick={() => setSelectedId(expanded ? null : inc.id)}
                       className="min-h-[40px] px-3 py-2 text-xs font-medium rounded-lg border border-slate-700 text-slate-200 hover:bg-slate-800 transition-colors whitespace-nowrap"
                     >
-                      {expanded ? 'Hide Command Tools' : 'Damage / Triage / Ops'}
+                      {expanded ? 'Hide Tools' : 'Rescue & Damage Tools'}
                     </button>
                   )}
                   {action && (
@@ -615,7 +632,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
                       <>
                         <label className="min-h-[36px] px-3 py-1 rounded-lg border border-slate-700 text-slate-200 hover:bg-slate-800 inline-flex items-center gap-1.5 cursor-pointer">
                           <Camera className="w-3.5 h-3.5 text-slate-400" aria-hidden="true" />
-                          <span>{preImages[inc.id] ? 'Pre-Img Ready' : 'Pre-Disaster Img'}</span>
+                          <span>{preImages[inc.id] ? 'Before Photo Ready' : 'Before Photo'}</span>
                           <input
                             type="file"
                             accept="image/*"
@@ -625,7 +642,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
                         </label>
                         <label className="min-h-[36px] px-3 py-1 rounded-lg border border-slate-700 text-slate-200 hover:bg-slate-800 inline-flex items-center gap-1.5 cursor-pointer">
                           <Camera className="w-3.5 h-3.5 text-sky-400" aria-hidden="true" />
-                          <span>{uploadedImages[inc.id] ? 'Post-Img Ready' : 'Post-Disaster Img'}</span>
+                          <span>{uploadedImages[inc.id] ? 'After Photo Ready' : 'After Photo'}</span>
                           <input
                             type="file"
                             accept="image/*"
@@ -1016,7 +1033,8 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
               )}
             </div>
           );
-        })}
+          })
+        )}
       </div>
     </div>
   );

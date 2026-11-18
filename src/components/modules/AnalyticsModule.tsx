@@ -7,6 +7,7 @@ import {
   IncidentTicket,
   UserRole,
 } from '../../types/modules';
+import { plainDisasterCategory, plainThreatVector } from '../../utils/plainLabels';
 
 interface AnalyticsModuleProps {
   series: AnalyticsPoint[];
@@ -156,10 +157,10 @@ ${incidents.map((i) => `<tr><td>${i.id}</td><td>${i.title}</td><td>${i.severity}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="text-xs text-slate-400">
           {isAdmin
-            ? `Full intelligence analytics across ${forecasts.length} hazards, ${threats.length} cyber detections, and ${incidents.length} incidents`
+            ? `Full summary across ${forecasts.length} warnings, ${threats.length} cyber alerts, and ${incidents.length} reports`
             : userRole === 'rescue'
-            ? 'Rescue operation performance & containment telemetry'
-            : 'Public disaster trends, risk comparison & cyber threat statistics'}
+            ? 'Rescue response speed & completion summary'
+            : 'Easy-to-read disaster trends & online safety summary'}
         </div>
 
         {isAdmin && (
@@ -258,14 +259,14 @@ ${incidents.map((i) => `<tr><td>${i.id}</td><td>${i.title}</td><td>${i.severity}
           <div className="lg:col-span-7 border border-slate-800 rounded-xl bg-[#0A0F1A] p-4">
             <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
               <h3 className="text-xs font-semibold text-slate-100">
-                Disaster Trend &amp; Containment Velocity
+                24-Hour Disasters &amp; Fixed Issues
               </h3>
               {activePoint && (
                 <div className="flex items-center gap-3 text-[11px] font-mono tabular-nums text-slate-400">
-                  <span>{activePoint.hour} UTC</span>
+                  <span>{activePoint.hour}</span>
                   <span className="text-red-400">Cyber {activePoint.cyberAlerts}</span>
-                  <span className="text-blue-400">Mitigated {activePoint.mitigated}</span>
-                  <span className="text-amber-400">Hazards {activePoint.disasterSignals}</span>
+                  <span className="text-blue-400">Fixed {activePoint.mitigated}</span>
+                  <span className="text-amber-400">Disasters {activePoint.disasterSignals}</span>
                 </div>
               )}
             </div>
@@ -328,13 +329,13 @@ ${incidents.map((i) => `<tr><td>${i.id}</td><td>${i.title}</td><td>${i.severity}
 
           <div className="lg:col-span-5 border border-slate-800 rounded-xl bg-[#0A0F1A] p-4 space-y-3">
             <h3 className="text-xs font-semibold text-slate-100">
-              Cyber Threat Statistics &amp; Risk Comparison
+              Top Online &amp; Scam Threats
             </h3>
             <div className="space-y-3">
               {vectorRows.map(([vec, count]) => (
                 <div key={vec} className="space-y-1">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-300">{vec}</span>
+                    <span className="text-slate-300">{plainThreatVector(vec)}</span>
                     <span className="font-mono tabular-nums text-slate-400">{count}</span>
                   </div>
                   <div className="h-2 w-full bg-slate-900 rounded-sm overflow-hidden">
@@ -354,13 +355,13 @@ ${incidents.map((i) => `<tr><td>${i.id}</td><td>${i.title}</td><td>${i.severity}
       {showTrendAndCyberStats && (
         <div className="border border-slate-800 rounded-xl bg-[#0A0F1A] p-4 space-y-3">
           <div className="flex items-center justify-between text-xs">
-            <span className="font-semibold text-slate-100">Disaster Risk Comparison by Hazard Category</span>
-            <span className="font-mono text-slate-400">{forecasts.length} monitored zones</span>
+            <span className="font-semibold text-slate-100">Warnings by Disaster Type</span>
+            <span className="font-mono text-slate-400">{forecasts.length} active areas</span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {disasterCategoryCounts.map(([cat, count]) => (
               <div key={cat} className="p-3 rounded-lg border border-slate-800 bg-[#0D1422] flex items-center justify-between text-xs">
-                <span className="text-slate-300">{cat}</span>
+                <span className="text-slate-300">{plainDisasterCategory(cat)}</span>
                 <span className="font-mono font-semibold text-amber-400 tabular-nums">{count}</span>
               </div>
             ))}
@@ -411,22 +412,28 @@ ${incidents.map((i) => `<tr><td>${i.id}</td><td>${i.title}</td><td>${i.severity}
             </div>
           </div>
           <div className="divide-y divide-slate-800">
-            {filteredIncidents.map((inc) => (
-              <div key={inc.id} className="px-4 py-3 space-y-1 text-xs">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-medium text-slate-100">
-                    <span className="font-mono text-blue-400 mr-2">{inc.id}</span>
-                    {inc.title}
-                  </span>
-                  <span className="font-mono text-slate-400">
-                    {inc.region} · {inc.updatedAt}
-                  </span>
-                </div>
-                <div className="text-[11px] text-slate-400">
-                  {inc.damageAssessment || inc.notes}
-                </div>
+            {filteredIncidents.length === 0 ? (
+              <div className="p-5 text-center text-xs text-slate-400">
+                No reports match these filters. Try selecting &ldquo;All Types&rdquo; or &ldquo;All Dates&rdquo;.
               </div>
-            ))}
+            ) : (
+              filteredIncidents.map((inc) => (
+                <div key={inc.id} className="px-4 py-3 space-y-1 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-medium text-slate-100">
+                      <span className="font-mono text-blue-400 mr-2">{inc.id}</span>
+                      {inc.title}
+                    </span>
+                    <span className="font-mono text-slate-400">
+                      {inc.region} · {inc.updatedAt}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-400">
+                    {inc.damageAssessment || inc.notes}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}
@@ -435,25 +442,31 @@ ${incidents.map((i) => `<tr><td>${i.id}</td><td>${i.title}</td><td>${i.severity}
       {showTrendAndCyberStats && (
         <div className="border border-slate-800 rounded-xl bg-[#0A0F1A] overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
-            <h3 className="text-xs font-semibold text-slate-100">Disaster–Cyber Risk Comparison</h3>
+            <h3 className="text-xs font-semibold text-slate-100">Connected Disaster &amp; Scam Warnings</h3>
             <span className="text-xs font-mono tabular-nums text-slate-400">{correlated.length} linked</span>
           </div>
           <div className="divide-y divide-slate-800">
-            {correlated.map(({ threat, disaster }) => (
-              <div
-                key={threat.id}
-                className="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
-              >
-                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-slate-200 min-w-0">
-                  <span className="font-mono text-amber-400">{disaster.id}</span>
-                  <span className="truncate max-w-full">{disaster.title}</span>
-                  <Link2 className="w-3.5 h-3.5 text-blue-400 shrink-0" aria-hidden="true" />
-                  <span className="font-mono text-red-400">{threat.id}</span>
-                  <span className="text-slate-300 truncate max-w-full">{threat.title}</span>
-                </div>
-                <span className="font-mono text-[11px] text-slate-400 shrink-0">{threat.platform}</span>
+            {correlated.length === 0 ? (
+              <div className="p-4 text-xs text-slate-400">
+                No connected disaster and cyber warnings right now.
               </div>
-            ))}
+            ) : (
+              correlated.map(({ threat, disaster }) => (
+                <div
+                  key={threat.id}
+                  className="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
+                >
+                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-slate-200 min-w-0">
+                    <span className="font-mono text-amber-400">{disaster.id}</span>
+                    <span className="truncate max-w-full">{disaster.title}</span>
+                    <Link2 className="w-3.5 h-3.5 text-blue-400 shrink-0" aria-hidden="true" />
+                    <span className="font-mono text-red-400">{threat.id}</span>
+                    <span className="text-slate-300 truncate max-w-full">{threat.title}</span>
+                  </div>
+                  <span className="font-mono text-[11px] text-slate-400 shrink-0">{threat.platform}</span>
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}

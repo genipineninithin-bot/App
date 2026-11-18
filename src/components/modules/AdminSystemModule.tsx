@@ -1,20 +1,24 @@
 import React, { useEffect, useState } from 'react';
 import {
   Activity,
+  BellRing,
   Cpu,
   Lock,
   Save,
   Shield,
   Users,
 } from 'lucide-react';
+import { BOOTSTRAPPED_ADMIN_EMAIL } from '../../firebase';
 import {
   AuditLogEntry,
   AuthUser,
+  ModuleId,
   SystemConfigState,
   UserRole,
 } from '../../types/modules';
 
 interface AdminSystemModuleProps {
+  currentUser: AuthUser;
   usersList: AuthUser[];
   systemConfig: SystemConfigState;
   auditLogs: AuditLogEntry[];
@@ -25,14 +29,17 @@ interface AdminSystemModuleProps {
     accountStatus: NonNullable<AuthUser['accountStatus']>
   ) => Promise<void>;
   onSaveSystemConfig: (cfg: SystemConfigState) => Promise<void>;
+  onOpenModule?: (id: ModuleId) => void;
 }
 
 export const AdminSystemModule: React.FC<AdminSystemModuleProps> = ({
+  currentUser,
   usersList,
   systemConfig,
   auditLogs,
   onUpdateUserAccount,
   onSaveSystemConfig,
+  onOpenModule,
 }) => {
   const [tab, setTab] = useState<'users' | 'config' | 'audit'>('users');
   const [cfg, setCfg] = useState<SystemConfigState>(systemConfig);
@@ -55,6 +62,41 @@ export const AdminSystemModule: React.FC<AdminSystemModuleProps> = ({
 
   return (
     <div className="space-y-5">
+      {/* Admin Access Details & Quick Alert Broadcast Link */}
+      <div className="p-4 rounded-xl border border-amber-500/35 bg-amber-950/15 flex flex-col lg:flex-row lg:items-center justify-between gap-4 text-xs">
+        <div className="space-y-1.5">
+          <div className="font-semibold text-amber-300 inline-flex items-center gap-1.5">
+            <Shield className="w-4 h-4 shrink-0" aria-hidden="true" />
+            <span>Admin Access Details &amp; Alert Control</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-slate-300 pt-1">
+            <div>
+              Signed-in Admin: <strong className="text-slate-100">{currentUser.email}</strong>
+            </div>
+            <div>
+              Primary Admin Email: <strong className="font-mono text-amber-300">{BOOTSTRAPPED_ADMIN_EMAIL}</strong>
+            </div>
+            <div>
+              Role Clearance: <strong className="text-emerald-300">Administrator (All 9 Modules)</strong>
+            </div>
+          </div>
+          <p className="text-[11px] text-slate-400">
+            You can grant Administrator or Rescue roles below, or go to <strong className="text-slate-200">08. Alerts &amp; Warnings</strong> to fill 1-click Test / Drill alert details and broadcast them to users right away.
+          </p>
+        </div>
+
+        {onOpenModule && (
+          <button
+            type="button"
+            onClick={() => onOpenModule('alerts')}
+            className="min-h-[40px] px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs inline-flex items-center gap-1.5 shrink-0"
+          >
+            <BellRing className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>Open Alert Center (Send Test Alerts)</span>
+          </button>
+        )}
+      </div>
+
       {/* Sub-Navigation */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-1 p-1 bg-[#0A0F1A] border border-slate-800 rounded-lg">
@@ -103,57 +145,63 @@ export const AdminSystemModule: React.FC<AdminSystemModuleProps> = ({
             <span>User Registration Approval, Rescue Team Roster &amp; Permissions</span>
             <span className="font-mono text-slate-400">{usersList.length} accounts</span>
           </div>
-          {usersList.map((u) => (
-            <div
-              key={u.id}
-              className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
-            >
-              <div className="min-w-0 space-y-0.5">
-                <div className="font-semibold text-slate-100 truncate">{u.name}</div>
-                <div className="font-mono text-[11px] text-slate-400 truncate">
-                  {u.email} · UID {u.id.slice(0, 12)}
+          {usersList.length === 0 ? (
+            <div className="p-6 text-center text-xs text-slate-400">
+              No registered accounts found yet. Signed-in users will appear here automatically.
+            </div>
+          ) : (
+            usersList.map((u) => (
+              <div
+                key={u.id}
+                className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+              >
+                <div className="min-w-0 space-y-0.5">
+                  <div className="font-semibold text-slate-100 truncate">{u.name}</div>
+                  <div className="font-mono text-[11px] text-slate-400 truncate">
+                    {u.email} · UID {u.id.slice(0, 12)}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <select
+                    value={u.role}
+                    onChange={(e) =>
+                      void onUpdateUserAccount(
+                        u.id,
+                        u.email,
+                        e.target.value as UserRole,
+                        u.accountStatus || 'Active'
+                      )
+                    }
+                    aria-label={`Role for ${u.email}`}
+                    className="min-h-[38px] px-2.5 rounded-lg border border-slate-700 bg-[#0D1422] text-slate-200"
+                  >
+                    <option value="citizen">User / Citizen</option>
+                    <option value="rescue">Rescue Team</option>
+                    <option value="administrator">Administrator</option>
+                  </select>
+
+                  <select
+                    value={u.accountStatus || 'Active'}
+                    onChange={(e) =>
+                      void onUpdateUserAccount(
+                        u.id,
+                        u.email,
+                        u.role,
+                        e.target.value as NonNullable<AuthUser['accountStatus']>
+                      )
+                    }
+                    aria-label={`Account status for ${u.email}`}
+                    className="min-h-[38px] px-2.5 rounded-lg border border-slate-700 bg-[#0D1422] text-slate-200"
+                  >
+                    <option value="Active">Approved / Active</option>
+                    <option value="Pending">Pending Review</option>
+                    <option value="Suspended">Suspended</option>
+                  </select>
                 </div>
               </div>
-
-              <div className="flex flex-wrap items-center gap-2 shrink-0">
-                <select
-                  value={u.role}
-                  onChange={(e) =>
-                    void onUpdateUserAccount(
-                      u.id,
-                      u.email,
-                      e.target.value as UserRole,
-                      u.accountStatus || 'Active'
-                    )
-                  }
-                  aria-label={`Role for ${u.email}`}
-                  className="min-h-[38px] px-2.5 rounded-lg border border-slate-700 bg-[#0D1422] text-slate-200"
-                >
-                  <option value="citizen">User / Citizen</option>
-                  <option value="rescue">Rescue Team</option>
-                  <option value="administrator">Administrator</option>
-                </select>
-
-                <select
-                  value={u.accountStatus || 'Active'}
-                  onChange={(e) =>
-                    void onUpdateUserAccount(
-                      u.id,
-                      u.email,
-                      u.role,
-                      e.target.value as NonNullable<AuthUser['accountStatus']>
-                    )
-                  }
-                  aria-label={`Account status for ${u.email}`}
-                  className="min-h-[38px] px-2.5 rounded-lg border border-slate-700 bg-[#0D1422] text-slate-200"
-                >
-                  <option value="Active">Approved / Active</option>
-                  <option value="Pending">Pending Review</option>
-                  <option value="Suspended">Suspended</option>
-                </select>
-              </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       )}
 

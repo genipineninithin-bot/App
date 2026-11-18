@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { LifeBuoy, Shield, ShieldCheck, UserCheck } from 'lucide-react';
-import { signInWithPopup, signOut } from 'firebase/auth';
+import { onAuthStateChanged, signInWithPopup, signOut, User as FirebaseUser } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
 import { verifyAndSyncUserProfile } from '../services/firestoreService';
 import { AuthUser, UserRole } from '../types/modules';
@@ -12,9 +12,17 @@ interface LoginPortalProps {
 
 export const LoginPortal: React.FC<LoginPortalProps> = ({ onAuthenticated }) => {
   const [portalRole, setPortalRole] = useState<UserRole>('citizen');
+  const [cachedFbUser, setCachedFbUser] = useState<FirebaseUser | null>(() => auth.currentUser);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [pendingCitizenFallback, setPendingCitizenFallback] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
+      setCachedFbUser(fbUser);
+    });
+    return () => unsubscribe();
+  }, []);
 
   const switchPortal = (role: UserRole) => {
     setPortalRole(role);
@@ -30,7 +38,6 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({ onAuthenticated }) => 
     try {
       const credential = await signInWithPopup(auth, googleProvider);
       const { authUser } = await verifyAndSyncUserProfile(credential.user, targetRole);
-      localStorage.setItem('nexora_portal_mode', authUser.role);
       onAuthenticated(authUser);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unable to authenticate with Google.';
@@ -43,19 +50,23 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({ onAuthenticated }) => 
     }
   };
 
-  const handleContinueAs = async (fallbackRole: 'citizen' | 'rescue') => {
+  const handleContinueAs = async (targetRole: UserRole) => {
     if (!auth.currentUser) {
-      await handleGoogleSignIn(fallbackRole);
+      await handleGoogleSignIn(targetRole);
       return;
     }
     setErrorMsg(null);
+    setPendingCitizenFallback(false);
     setIsSubmitting(true);
     try {
-      const { authUser } = await verifyAndSyncUserProfile(auth.currentUser, fallbackRole);
-      localStorage.setItem('nexora_portal_mode', fallbackRole);
+      const { authUser } = await verifyAndSyncUserProfile(auth.currentUser, targetRole);
       onAuthenticated(authUser);
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Unable to enter portal.');
+      const msg = err instanceof Error ? err.message : 'Unable to enter portal.';
+      if (targetRole === 'administrator' && msg.includes('Administrator clearance required')) {
+        setPendingCitizenFallback(true);
+      }
+      setErrorMsg(msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -85,10 +96,10 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({ onAuthenticated }) => 
           <div className="space-y-4">
             <div>
               <h2 className="font-display text-base font-semibold text-slate-100">
-                Select Access Portal
+                Choose Your Account Type
               </h2>
               <p className="mt-1 text-xs text-slate-400 leading-relaxed">
-                Choose your operational role for Mobile or Windows command access.
+                Pick how you want to use NEXORA AI today.
               </p>
             </div>
 
@@ -110,9 +121,9 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({ onAuthenticated }) => 
                   aria-hidden="true"
                 />
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold">User / Citizen Portal</div>
+                  <div className="text-xs font-semibold">User / Citizen</div>
                   <div className="text-[11px] text-slate-400 mt-0.5">
-                    Hazard alerts, cyber safety summary, AI assistant &amp; SOS reporting
+                    See local alerts, check fake scam links, ask AI, and report emergencies
                   </div>
                 </div>
               </button>
@@ -133,9 +144,9 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({ onAuthenticated }) => 
                   aria-hidden="true"
                 />
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold">Rescue Team Portal</div>
+                  <div className="text-xs font-semibold">Rescue Team</div>
                   <div className="text-[11px] text-slate-400 mt-0.5">
-                    Field dispatch queue, disaster risk overview &amp; status updates
+                    See assigned emergencies, update rescue progress, and manage supplies
                   </div>
                 </div>
               </button>
@@ -156,9 +167,9 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({ onAuthenticated }) => 
                   aria-hidden="true"
                 />
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold">Administrator Portal</div>
+                  <div className="text-xs font-semibold">Administrator</div>
                   <div className="text-[11px] text-slate-400 mt-0.5">
-                    Full 9-module command, cyber defense, relief &amp; system admin
+                    Manage all alerts, verify reports, assign rescue teams, and control settings
                   </div>
                 </div>
               </button>
@@ -169,17 +180,17 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({ onAuthenticated }) => 
           <div className="pt-4 border-t border-slate-800/80 space-y-1.5 text-[11px] text-slate-400">
             <div className="font-medium text-slate-300">
               {isAdmin
-                ? 'Administrator Modules (01–09)'
+                ? 'What Admins Can Do (All 9 Tools)'
                 : isRescue
-                ? 'Rescue Team Modules (01–08)'
-                : 'User / Citizen Modules (01–08)'}
+                ? 'What Rescue Teams Can Do'
+                : 'What Citizens Can Do'}
             </div>
             <p className="leading-relaxed">
               {isAdmin
-                ? 'Full command across Prediction, Cyber Defense, Nexora AI, Response, Relief, Analytics, Alerts & System Admin.'
+                ? 'Full access to disaster alerts, cyber protection, AI helper, rescue dispatch, shelters, reports, and user settings.'
                 : isRescue
-                ? 'Command Center, Disaster Monitor, Link Verify, Nexora AI, Patient Triage, Relief Fleet, Performance & Alerts.'
-                : 'Command Center, Disaster Risks, Phishing Scanner, Nexora AI, SOS Reporting, Shelters, Trends & Alerts.'}
+                ? 'View live 3D map, check disaster warnings, update rescue steps, and manage hospital/shelter capacity.'
+                : 'View live 3D disaster map, find nearby hospitals & shelters, check suspicious links, and ask the AI helper.'}
             </p>
           </div>
         </div>
@@ -189,24 +200,24 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({ onAuthenticated }) => 
           <div>
             <div className="text-[11px] font-mono text-slate-400">
               {isAdmin
-                ? 'Firebase RBAC Clearance'
+                ? 'Verified Admin Login'
                 : isRescue
-                ? 'Field Responder Uplink'
-                : 'Public Safety Access'}
+                ? 'Rescue Responder Login'
+                : 'Public Safety Login'}
             </div>
             <h3 className="font-display text-lg font-semibold text-slate-100 mt-0.5">
               {isAdmin
                 ? 'Administrator Sign In'
                 : isRescue
                 ? 'Rescue Team Sign In'
-                : 'User / Citizen Sign In'}
+                : 'Citizen Sign In'}
             </h3>
             <p className="mt-1.5 text-xs text-slate-400 leading-relaxed">
               {isAdmin
-                ? 'Authenticate with an authorized Google operator account verified against the Firestore administrator registry.'
+                ? 'Sign in with an approved administrator Google account to manage alerts and rescue teams.'
                 : isRescue
-                ? 'Sign in with Google to coordinate disaster response dispatches, monitor risk charts, and update field incident status.'
-                : 'Sign in with Google to view disaster risks, cybersecurity advisories, live statistics, and submit emergency SOS reports.'}
+                ? 'Sign in with Google to see active rescue requests, maps, and patient status updates.'
+                : 'Sign in with Google to view disaster warnings, find shelters, check links for scams, and report emergencies.'}
             </p>
           </div>
 
@@ -220,18 +231,18 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({ onAuthenticated }) => 
               />
               <span>
                 {isAdmin
-                  ? 'Verified Operator Session'
+                  ? 'Admin Access Details'
                   : isRescue
-                  ? 'Active Rescue Dispatch Session'
-                  : 'Protected User Session'}
+                  ? 'Connected Rescue Team Account'
+                  : 'Safe Citizen Account'}
               </span>
             </div>
             <p className="text-[11px] text-slate-400 leading-relaxed">
               {isAdmin
-                ? 'Session state, incident dispatches, cyber threat containments, and forecast feeds persist in Cloud Firestore.'
+                ? 'Authorized Primary Admin Google Email: genipineninithin@gmail.com (or any account approved as Administrator inside Module 09 -> Admin Settings). Sign in here to write and send test or live safety alerts in Module 08.'
                 : isRescue
-                ? 'Rescue unit status transitions and incident reports sync in real time across Windows and Mobile field terminals.'
-                : 'Your profile and emergency reports are synced securely with Cloud Firestore and protected by role-based rules.'}
+                ? 'Your rescue updates and shelter counts sync live across phones and desktop screens.'
+                : 'Your emergency reports and alert preferences are saved safely and kept private.'}
             </p>
           </div>
 
@@ -272,34 +283,63 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({ onAuthenticated }) => 
             </div>
           )}
 
-          <button
-            type="button"
-            onClick={() => handleGoogleSignIn(portalRole)}
-            disabled={isSubmitting}
-            className={`w-full min-h-[48px] px-4 py-2.5 rounded-lg text-sm font-semibold text-white transition-colors disabled:opacity-60 inline-flex items-center justify-center gap-2.5 ${
-              isAdmin
-                ? 'bg-amber-600 hover:bg-amber-700'
-                : isRescue
-                ? 'bg-emerald-600 hover:bg-emerald-700'
-                : 'bg-blue-600 hover:bg-blue-700'
-            }`}
-          >
-            <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                fill="currentColor"
-                d="M21.35 11.1h-9.17v2.73h6.51c-.33 3.81-3.5 5.44-6.5 5.44C8.36 19.27 5 16.25 5 12c0-4.1 3.2-7.27 7.2-7.27c3.09 0 4.9 1.97 4.9 1.97L19 4.72S16.56 2 12.1 2C6.42 2 2.03 6.8 2.03 12c0 5.05 4.13 10 10.22 10c5.35 0 9.25-3.67 9.25-9.09c0-1.15-.15-1.81-.15-1.81Z"
-              />
-            </svg>
-            <span>
-              {isSubmitting
-                ? 'Authenticating...'
-                : isAdmin
-                ? 'Sign in with Google (Administrator)'
-                : isRescue
-                ? 'Sign in with Google (Rescue Team)'
-                : 'Sign in with Google (User / Citizen)'}
-            </span>
-          </button>
+          <div className="space-y-2.5">
+            <button
+              type="button"
+              onClick={() => handleGoogleSignIn(portalRole)}
+              disabled={isSubmitting}
+              className={`w-full min-h-[48px] px-4 py-2.5 rounded-lg text-sm font-semibold text-white transition-colors disabled:opacity-60 inline-flex items-center justify-center gap-2.5 ${
+                isAdmin
+                  ? 'bg-amber-600 hover:bg-amber-700'
+                  : isRescue
+                  ? 'bg-emerald-600 hover:bg-emerald-700'
+                  : 'bg-blue-600 hover:bg-blue-700'
+              }`}
+            >
+              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  fill="currentColor"
+                  d="M21.35 11.1h-9.17v2.73h6.51c-.33 3.81-3.5 5.44-6.5 5.44C8.36 19.27 5 16.25 5 12c0-4.1 3.2-7.27 7.2-7.27c3.09 0 4.9 1.97 4.9 1.97L19 4.72S16.56 2 12.1 2C6.42 2 2.03 6.8 2.03 12c0 5.05 4.13 10 10.22 10c5.35 0 9.25-3.67 9.25-9.09c0-1.15-.15-1.81-.15-1.81Z"
+                />
+              </svg>
+              <span>
+                {isSubmitting
+                  ? 'Authenticating...'
+                  : isAdmin
+                  ? 'Sign in with Google (Administrator)'
+                  : isRescue
+                  ? 'Sign in with Google (Rescue Team)'
+                  : 'Sign in with Google (User / Citizen)'}
+              </span>
+            </button>
+
+            {cachedFbUser?.email && (
+              <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-lg border border-slate-800 bg-[#080C15]/80 text-[11px] text-slate-400">
+                <span className="truncate">
+                  Google account ready: <strong className="text-slate-200">{cachedFbUser.email}</strong>
+                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() => handleContinueAs(portalRole)}
+                    className="text-blue-400 hover:text-blue-300 font-medium underline underline-offset-2 disabled:opacity-50"
+                  >
+                    Enter Portal
+                  </button>
+                  <span className="text-slate-600" aria-hidden="true">·</span>
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() => void signOut(auth)}
+                    className="text-slate-400 hover:text-slate-200 disabled:opacity-50"
+                  >
+                    Clear Session
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

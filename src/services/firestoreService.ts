@@ -1068,6 +1068,16 @@ export async function updateAlertStatus(
   }
 }
 
+export async function deleteAlertDoc(id: string): Promise<void> {
+  const safeId = sanitizeDocId(id, BLUEPRINT_LIMITS.idMax);
+  const path = `alerts/${safeId}`;
+  try {
+    await deleteDoc(doc(db, 'alerts', safeId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
 export async function updateOwnNotificationPrefs(
   uid: string,
   notifyEmail: boolean,

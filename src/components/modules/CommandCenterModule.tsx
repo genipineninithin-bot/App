@@ -7,11 +7,9 @@ import {
   Bot,
   Flame,
   HeartPulse,
-  Monitor,
   Settings,
   ShieldAlert,
   Siren,
-  Smartphone,
 } from 'lucide-react';
 import {
   AlertNotification,
@@ -26,6 +24,13 @@ import {
 } from '../../types/modules';
 import { WEATHER_STATIONS } from '../../data/platformData';
 import { TacticalGlobe3D } from '../TacticalGlobe3D';
+import {
+  plainDisasterCategory,
+  plainIncidentDomain,
+  plainIncidentStatus,
+  plainSeverity,
+  plainThreatVector,
+} from '../../utils/plainLabels';
 
 interface CommandCenterModuleProps {
   forecasts: DisasterForecast[];
@@ -182,7 +187,7 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
       id: f.id,
       kind: 'disaster' as const,
       title: f.title,
-      detail: `${f.category} · ${f.metric} · ${f.confidencePct}% confidence`,
+      detail: `${plainDisasterCategory(f.category)} · ${f.metric} · ${f.confidencePct}% certainty`,
       targetModule: 'disaster' as ModuleId,
       pt: coordsForRegion(f.region),
     })),
@@ -191,7 +196,7 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
           id: t.id,
           kind: 'cyber' as const,
           title: t.title,
-          detail: `${t.vector} · ${t.platform} · IOC ${t.ioc}`,
+          detail: `${plainThreatVector(t.vector)} · ${t.platform} · ${t.affectedHosts} devices`,
           targetModule: 'cyber' as ModuleId,
           pt: coordsForRegion(t.platform),
         }))
@@ -209,64 +214,64 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
     {
       id: 'disaster',
       num: '02',
-      label: 'Disaster Monitor',
-      stat: `${forecasts.length} active feeds`,
+      label: 'Disaster Alerts',
+      stat: `${forecasts.length} active warnings`,
       icon: Flame,
       visible: true,
     },
     {
       id: 'cyber',
       num: '03',
-      label: 'Cyber Defense',
-      stat: isAdmin ? `${activeThreats.length} threats` : 'URL & phishing scan',
+      label: 'Link & Scam Check',
+      stat: isAdmin ? `${activeThreats.length} threats` : 'Check links & texts',
       icon: ShieldAlert,
       visible: true,
     },
     {
       id: 'assistant',
       num: '04',
-      label: 'Nexora AI',
-      stat: 'Multilingual AI',
+      label: 'Ask NEXORA AI',
+      stat: 'Help in 7 languages',
       icon: Bot,
       visible: true,
     },
     {
       id: 'response',
       num: '05',
-      label: 'Response Ops',
-      stat: `${openIncidents.length} open alerts`,
+      label: 'Report & Rescue',
+      stat: `${openIncidents.length} active cases`,
       icon: Siren,
       visible: true,
     },
     {
       id: 'relief',
       num: '06',
-      label: 'Rescue & Relief',
-      stat: `${reliefCount} hubs & stock`,
+      label: 'Hospitals & Shelters',
+      stat: `${reliefCount} locations`,
       icon: HeartPulse,
       visible: true,
     },
     {
       id: 'analytics',
       num: '07',
-      label: 'Data Analytics',
-      stat: isAdmin ? 'Exposure & reports' : 'Trends & risk',
+      label: 'Trends & Reports',
+      stat: isAdmin ? 'People & impact stats' : 'Safety trends',
       icon: Activity,
       visible: true,
     },
     {
       id: 'alerts',
       num: '08',
-      label: 'Secure Alerts',
-      stat: `${activeAlertsCount} advisories`,
+      label: 'Safety Alerts',
+      stat: `${activeAlertsCount} live alerts`,
       icon: BellRing,
       visible: true,
     },
     {
       id: 'admin',
       num: '09',
-      label: 'Admin & System',
-      stat: 'Users & audit logs',
+      label: 'Admin Settings',
+      stat: 'Users & activity log',
       icon: Settings,
       visible: isAdmin,
     },
@@ -282,15 +287,15 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
           className="text-left p-3.5 sm:p-4 hover:bg-slate-900/70 transition-colors"
         >
           <div className="flex items-center justify-between text-[11px] text-slate-400">
-            <span>Disasters &amp; High-Risk Zones</span>
+            <span>Active Disasters &amp; Warnings</span>
             <ArrowUpRight className="w-3.5 h-3.5" aria-hidden="true" />
           </div>
           <div className="mt-1.5 flex items-baseline gap-2">
             <span className="font-display text-xl font-bold tabular-nums text-slate-100">
               {forecasts.length}
             </span>
-            <span className="text-xs font-mono tabular-nums text-amber-400">
-              {criticalForecasts} critical · {forecasts.filter((f) => f.severity === 'Critical' || f.severity === 'High').length} high-risk
+            <span className="text-xs font-medium tabular-nums text-amber-400">
+              {criticalForecasts} danger now · {forecasts.filter((f) => f.severity === 'Critical' || f.severity === 'High').length} high risk
             </span>
           </div>
         </button>
@@ -301,15 +306,15 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
           className="text-left p-3.5 sm:p-4 hover:bg-slate-900/70 transition-colors"
         >
           <div className="flex items-center justify-between text-[11px] text-slate-400">
-            <span>Emergencies &amp; Rescue Ops</span>
+            <span>Emergencies &amp; Rescue Help</span>
             <ArrowUpRight className="w-3.5 h-3.5" aria-hidden="true" />
           </div>
           <div className="mt-1.5 flex items-baseline gap-2">
             <span className="font-display text-xl font-bold tabular-nums text-slate-100">
               {openIncidents.length}
             </span>
-            <span className="text-xs font-mono tabular-nums text-blue-400">
-              {incidents.filter((i) => i.status === 'Resolved').length} resolved · {openIncidents.filter((i) => i.status === 'Dispatched' || i.status === 'In Progress').length} active
+            <span className="text-xs font-medium tabular-nums text-blue-400">
+              {incidents.filter((i) => i.status === 'Resolved').length} completed · {openIncidents.filter((i) => i.status === 'Dispatched' || i.status === 'In Progress').length} active
             </span>
           </div>
         </button>
@@ -321,15 +326,15 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
             className="text-left p-3.5 sm:p-4 hover:bg-slate-900/70 transition-colors"
           >
             <div className="flex items-center justify-between text-[11px] text-slate-400">
-              <span>Cyber Threats &amp; URL Scans</span>
+              <span>Scam &amp; Link Safety Checks</span>
               <ArrowUpRight className="w-3.5 h-3.5" aria-hidden="true" />
             </div>
             <div className="mt-1.5 flex items-baseline gap-2">
               <span className="font-display text-xl font-bold tabular-nums text-slate-100">
                 {isAdmin ? activeThreats.length : urlsScannedCount}
               </span>
-              <span className="text-xs font-mono tabular-nums text-red-400">
-                {urlsScannedCount} scanned · {phishingDetectedCount} phishing
+              <span className="text-xs font-medium tabular-nums text-red-400">
+                {urlsScannedCount} checked · {phishingDetectedCount} unsafe
               </span>
             </div>
           </button>
@@ -340,14 +345,14 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
             className="text-left p-3.5 sm:p-4 hover:bg-slate-900/70 transition-colors"
           >
             <div className="flex items-center justify-between text-[11px] text-slate-400">
-              <span>Relief Hubs &amp; Units</span>
+              <span>Hospitals &amp; Shelters</span>
               <ArrowUpRight className="w-3.5 h-3.5" aria-hidden="true" />
             </div>
             <div className="mt-1.5 flex items-baseline gap-2">
               <span className="font-display text-xl font-bold tabular-nums text-slate-100">
                 {reliefCount}
               </span>
-              <span className="text-xs font-mono text-emerald-400">active</span>
+              <span className="text-xs font-medium text-emerald-400">open &amp; ready</span>
             </div>
           </button>
         )}
@@ -358,15 +363,15 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
           className="text-left p-3.5 sm:p-4 hover:bg-slate-900/70 transition-colors"
         >
           <div className="flex items-center justify-between text-[11px] text-slate-400">
-            <span>Alerts &amp; Weather Watch</span>
+            <span>Live Alerts &amp; Rain Watch</span>
             <ArrowUpRight className="w-3.5 h-3.5" aria-hidden="true" />
           </div>
           <div className="mt-1.5 flex items-center gap-2 text-xs text-slate-200 truncate">
             <span className="font-display text-lg font-bold tabular-nums text-amber-400">
               {activeAlertsCount}
             </span>
-            <span className="text-[11px] font-mono text-slate-400 truncate">
-              {WEATHER_STATIONS[0]?.region}: {WEATHER_STATIONS[0]?.rainfallMmH}mm/h
+            <span className="text-[11px] text-slate-400 truncate">
+              {WEATHER_STATIONS[0]?.region}: {WEATHER_STATIONS[0]?.rainfallMmH} mm/h rain
             </span>
           </div>
         </button>
@@ -375,9 +380,9 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
       {/* Quick Access to All Role-Authorized Modules */}
       <div className="space-y-2">
         <div className="flex items-center justify-between text-xs">
-          <h3 className="font-semibold text-slate-200">Quick Module Access</h3>
-          <span className="text-[11px] font-mono text-slate-400">
-            {isAdmin ? 'Administrator Suite' : isRescue ? 'Rescue Operations' : 'Public Safety View'}
+          <h3 className="font-semibold text-slate-200">Quick Tools &amp; Sections</h3>
+          <span className="text-[11px] text-slate-400">
+            {isAdmin ? 'Admin Controls' : isRescue ? 'Rescue Team View' : 'Public Safety View'}
           </span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
@@ -401,7 +406,7 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
                   </div>
                   <div className="min-w-0">
                     <div className="text-xs font-semibold text-slate-100 truncate">{m.label}</div>
-                    <div className="text-[11px] font-mono text-slate-400 truncate">{m.stat}</div>
+                    <div className="text-[11px] text-slate-400 truncate">{m.stat}</div>
                   </div>
                 </button>
               );
@@ -414,16 +419,16 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
         <div className="lg:col-span-7 border border-slate-800 rounded-xl bg-[#0A0F1A] p-4">
           <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
             <h3 className="text-xs font-semibold text-slate-100">
-              24-Hour Operational Telemetry
+              Last 24 Hours Activity &amp; Fixed Issues
             </h3>
             {activePoint && (
-              <div className="flex flex-wrap items-center gap-3 text-[11px] font-mono tabular-nums text-slate-400">
-                <span>{activePoint.hour} UTC</span>
-                <span className="text-amber-400">Hazards {activePoint.disasterSignals}</span>
+              <div className="flex flex-wrap items-center gap-3 text-[11px] tabular-nums text-slate-400">
+                <span>{activePoint.hour}</span>
+                <span className="text-amber-400">Disasters: {activePoint.disasterSignals}</span>
                 {showCyberSummary && (
-                  <span className="text-red-400">Cyber {activePoint.cyberAlerts}</span>
+                  <span className="text-red-400">Cyber Alerts: {activePoint.cyberAlerts}</span>
                 )}
-                <span className="text-blue-400">Mitigated {activePoint.mitigated}</span>
+                <span className="text-blue-400">Fixed: {activePoint.mitigated}</span>
               </div>
             )}
           </div>
@@ -499,13 +504,13 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
         <div className="lg:col-span-5 border border-slate-800 rounded-xl bg-[#0A0F1A] p-4 flex flex-col justify-between gap-4">
           <div className="space-y-3">
             <h3 className="text-xs font-semibold text-slate-100">
-              Active Risk &amp; Severity Distribution
+              Current Risk Levels
             </h3>
             <div className="space-y-2.5">
               {severityBreakdown.counts.map(({ level, count }) => (
                 <div key={level} className="space-y-1">
                   <div className="flex items-center justify-between text-xs">
-                    <span className={severityColor(level)}>{level}</span>
+                    <span className={severityColor(level)}>{plainSeverity(level)}</span>
                     <span className="font-mono tabular-nums text-slate-300">{count}</span>
                   </div>
                   <div className="h-2 w-full bg-slate-900 rounded-sm overflow-hidden">
@@ -530,20 +535,20 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
           </div>
 
           <div className="pt-3 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
-            <span>Grid Exposure</span>
+            <span>Power Grid at Risk</span>
             <span className="font-mono tabular-nums text-amber-400">
-              {totalGridMw.toLocaleString()} MW across {categoryBreakdown.length} hazard classes
+              {totalGridMw.toLocaleString()} MW across {categoryBreakdown.length} disaster types
             </span>
           </div>
         </div>
       </div>
 
-      {/* Disaster Risk Overview + 3D Alerts & Impact Situational Theater Map */}
+      {/* Disaster Risk Overview + 3D Alerts & Impact Map */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         <div className="lg:col-span-8 space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-xs font-semibold text-slate-200">
-              Global Alerts, Disasters &amp; Impact Theater
+              Global Alerts, Disasters &amp; Help Map
             </span>
             <div className="inline-flex items-center p-0.5 rounded-lg border border-slate-800 bg-[#0A0F1A] text-[11px]">
               <button
@@ -566,7 +571,7 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
                     : 'text-slate-400 hover:text-slate-100'
                 }`}
               >
-                2D Map
+                2D Flat Map
               </button>
             </div>
           </div>
@@ -586,10 +591,10 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
             <div className="border border-slate-800 rounded-xl bg-[#0A0F1A] overflow-hidden">
               <div className="px-4 py-2.5 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
                 <span className="text-xs font-semibold text-slate-100">
-                  Disaster Risk Overview &amp; 2D Schematic
+                  2D Disaster &amp; Risk Map
                 </span>
                 <span className="text-[11px] text-slate-400">
-                  Select any marker to inspect or jump to module
+                  Tap any dot to see what is happening there
                 </span>
               </div>
 
@@ -646,10 +651,9 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
                 <div className="px-4 py-3 border-t border-slate-800 bg-[#0D1422] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div className="min-w-0">
                     <div className="text-xs font-semibold text-slate-100 truncate">
-                      <span className="font-mono text-blue-400 mr-2">{focusedPin.id}</span>
                       {focusedPin.title}
                     </div>
-                    <div className="text-[11px] font-mono text-slate-400 truncate">
+                    <div className="text-[11px] text-slate-400 truncate">
                       {focusedPin.detail}
                     </div>
                   </div>
@@ -658,7 +662,7 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
                     onClick={() => onOpenModule(focusedPin.targetModule)}
                     className="min-h-[38px] px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 whitespace-nowrap shrink-0"
                   >
-                    Open Module
+                    See Full Details
                   </button>
                 </div>
               )}
@@ -673,16 +677,16 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="text-xs font-semibold text-slate-100">
-                    Cybersecurity Threat Summary
+                    Scam &amp; Cyber Safety Summary
                   </h3>
-                  <span className="text-[11px] font-mono text-red-400">
+                  <span className="text-[11px] font-medium text-red-400">
                     {activeThreats.length} active
                   </span>
                 </div>
                 <p className="text-xs text-slate-400 leading-relaxed">
                   {isAdmin
-                    ? `${affectedHostsTotal} endpoints under active monitoring across OT/SCADA, Windows, and Mobile responder fleets.`
-                    : 'Elevated phishing & malicious relief portal traffic monitored. Scan suspicious URLs or messages in Cyber Defense.'}
+                    ? `${affectedHostsTotal} computers and phones watched for viruses, fake links, and power system tampering.`
+                    : 'Watch out for fake relief websites and scam texts. Paste any suspicious link or message in our Link Safety Checker before clicking.'}
                 </p>
                 <div className="divide-y divide-slate-800 border-t border-slate-800">
                   {vectorSummary.slice(0, 4).map(([vector, count]) => (
@@ -690,9 +694,9 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
                       key={vector}
                       className="py-2 flex items-center justify-between text-xs"
                     >
-                      <span className="text-slate-300">{vector}</span>
+                      <span className="text-slate-300">{plainThreatVector(vector)}</span>
                       <span className="font-mono tabular-nums text-slate-400">
-                        {count} {count === 1 ? 'signal' : 'signals'}
+                        {count} {count === 1 ? 'alert' : 'alerts'}
                       </span>
                     </div>
                   ))}
@@ -703,7 +707,7 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
                 onClick={() => onOpenModule('cyber')}
                 className="min-h-[40px] w-full px-3 py-2 rounded-lg border border-slate-700 text-xs font-medium text-slate-100 hover:bg-slate-800 transition-colors"
               >
-                {isAdmin ? 'Open Cyber Defense' : 'Open Phishing & URL Scanner'}
+                {isAdmin ? 'Open Cyber Safety Controls' : 'Check a Suspicious Link or Text'}
               </button>
             </>
           ) : (
@@ -711,14 +715,14 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="text-xs font-semibold text-slate-100">
-                    Disaster Categories in Theater
+                    Active Disaster Types
                   </h3>
-                  <span className="text-[11px] font-mono text-amber-400">
-                    {forecasts.length} zones
+                  <span className="text-[11px] font-medium text-amber-400">
+                    {forecasts.length} areas
                   </span>
                 </div>
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  Prioritized physical hazard distribution for active rescue units and dispatch staging.
+                  Summary of active disasters and storms to help rescue teams prepare where help is needed most.
                 </p>
                 <div className="divide-y divide-slate-800 border-t border-slate-800">
                   {categoryBreakdown.map(([cat, count]) => (
@@ -726,9 +730,9 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
                       key={cat}
                       className="py-2 flex items-center justify-between text-xs"
                     >
-                      <span className="text-slate-300">{cat}</span>
+                      <span className="text-slate-300">{plainDisasterCategory(cat)}</span>
                       <span className="font-mono tabular-nums text-amber-400">
-                        {count} {count === 1 ? 'feed' : 'feeds'}
+                        {count} {count === 1 ? 'area' : 'areas'}
                       </span>
                     </div>
                   ))}
@@ -739,33 +743,33 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
                 onClick={() => onOpenModule('disaster')}
                 className="min-h-[40px] w-full px-3 py-2 rounded-lg border border-slate-700 text-xs font-medium text-slate-100 hover:bg-slate-800 transition-colors"
               >
-                Open Disaster Monitor
+                See Disaster Warnings
               </button>
             </>
           )}
         </div>
       </div>
 
-      {/* Bottom Split: Active Incident Alerts + Recent Incident Reports */}
+      {/* Bottom Split: Urgent Emergencies Right Now + Latest Emergency Reports */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         <div className="lg:col-span-6 border border-slate-800 rounded-xl bg-[#0A0F1A] overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
-              <h3 className="text-xs font-semibold text-slate-100">Active Incident Alerts</h3>
+              <h3 className="text-xs font-semibold text-slate-100">Urgent Emergencies Right Now</h3>
             </div>
             <button
               type="button"
               onClick={() => onOpenModule('response')}
               className="text-xs text-blue-400 hover:text-blue-300 font-medium whitespace-nowrap"
             >
-              Response Ops
+              See All
             </button>
           </div>
           <div className="divide-y divide-slate-800">
             {activeAlerts.length === 0 ? (
               <div className="p-4 text-xs text-slate-400">
-                No active incident alerts require immediate dispatch.
+                No urgent emergencies need immediate action right now.
               </div>
             ) : (
               activeAlerts.slice(0, 4).map((alert) => (
@@ -775,17 +779,17 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
                 >
                   <div className="min-w-0 space-y-0.5">
                     <div className="flex flex-wrap items-center gap-2 text-slate-400">
-                      <span className="font-mono text-slate-300">{alert.id}</span>
-                      <span aria-hidden="true">·</span>
                       <span className={`font-semibold ${severityColor(alert.severity)}`}>
-                        {alert.severity}
+                        {plainSeverity(alert.severity)}
                       </span>
                       <span aria-hidden="true">·</span>
                       <span>{alert.region}</span>
+                      <span aria-hidden="true">·</span>
+                      <span className="font-mono text-slate-500">{alert.id}</span>
                     </div>
                     <div className="font-medium text-slate-100 truncate">{alert.title}</div>
-                    <div className="text-[11px] font-mono text-slate-400">
-                      {alert.assignedUnit} · {alert.platformSupport}
+                    <div className="text-[11px] text-slate-400">
+                      Team: {alert.assignedUnit} · {plainIncidentStatus(alert.status)}
                     </div>
                   </div>
                   <button
@@ -793,7 +797,7 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
                     onClick={() => onOpenModule('response')}
                     className="min-h-[36px] px-2.5 py-1 rounded-lg border border-slate-700 text-slate-200 hover:bg-slate-800 whitespace-nowrap shrink-0"
                   >
-                    Inspect
+                    View Details
                   </button>
                 </div>
               ))
@@ -803,39 +807,43 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
 
         <div className="lg:col-span-6 border border-slate-800 rounded-xl bg-[#0A0F1A] overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
-            <h3 className="text-xs font-semibold text-slate-100">Recent Incident Reports</h3>
-            <span className="text-[11px] font-mono tabular-nums text-slate-400">
+            <h3 className="text-xs font-semibold text-slate-100">Latest Emergency Reports</h3>
+            <span className="text-[11px] tabular-nums text-slate-400">
               {incidents.length} total
             </span>
           </div>
           <div className="divide-y divide-slate-800">
-            {incidents.slice(0, 4).map((inc) => (
-              <div
-                key={inc.id}
-                className="px-4 py-3 flex items-start justify-between gap-3 text-xs"
-              >
-                <div className="min-w-0 space-y-0.5">
-                  <div className="flex flex-wrap items-center gap-2 text-slate-400">
-                    <span className="font-mono text-slate-300">{inc.id}</span>
-                    <span aria-hidden="true">·</span>
-                    <span>{inc.domain}</span>
-                    <span aria-hidden="true">·</span>
-                    <span className="text-blue-400">{inc.status}</span>
-                    <span aria-hidden="true">·</span>
-                    <span>{inc.updatedAt}</span>
-                  </div>
-                  <div className="font-medium text-slate-100 truncate">{inc.title}</div>
-                  <div className="text-[11px] text-slate-400 truncate">{inc.notes}</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onOpenModule('response')}
-                  className="min-h-[36px] px-2.5 py-1 rounded-lg border border-slate-700 text-slate-200 hover:bg-slate-800 whitespace-nowrap shrink-0"
-                >
-                  Manage
-                </button>
+            {incidents.length === 0 ? (
+              <div className="p-4 text-xs text-slate-400">
+                No emergency reports submitted yet.
               </div>
-            ))}
+            ) : (
+              incidents.slice(0, 4).map((inc) => (
+                <div
+                  key={inc.id}
+                  className="px-4 py-3 flex items-start justify-between gap-3 text-xs"
+                >
+                  <div className="min-w-0 space-y-0.5">
+                    <div className="flex flex-wrap items-center gap-2 text-slate-400">
+                      <span>{plainIncidentDomain(inc.domain)}</span>
+                      <span aria-hidden="true">·</span>
+                      <span className="text-blue-400 font-medium">{plainIncidentStatus(inc.status)}</span>
+                      <span aria-hidden="true">·</span>
+                      <span>{inc.updatedAt}</span>
+                    </div>
+                    <div className="font-medium text-slate-100 truncate">{inc.title}</div>
+                    <div className="text-[11px] text-slate-400 truncate">{inc.notes}</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onOpenModule('response')}
+                    className="min-h-[36px] px-2.5 py-1 rounded-lg border border-slate-700 text-slate-200 hover:bg-slate-800 whitespace-nowrap shrink-0"
+                  >
+                    Open
+                  </button>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>

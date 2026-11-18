@@ -17,6 +17,7 @@ import {
   UserRole,
 } from '../../types/modules';
 import { TacticalGlobe3D } from '../TacticalGlobe3D';
+import { plainReliefKind, plainReliefStatus } from '../../utils/plainLabels';
 
 interface ReliefModuleProps {
   resources: ReliefResource[];
@@ -37,10 +38,10 @@ interface ReliefModuleProps {
 }
 
 const EMERGENCY_CONTACTS = [
-  { label: 'National Emergency Dispatch', number: '112 / 911', scope: 'All Regions · 24/7' },
-  { label: 'Sendai Maritime & Tsunami Ops', number: '+81-22-555-0199', scope: 'Sendai Coastal Sector' },
-  { label: 'Luzon Civil Defense Relief Desk', number: '+63-2-555-0144', scope: 'Luzon Strait' },
-  { label: 'Cyber Incident Helpline (CERT)', number: '+1-800-555-0177', scope: 'Phishing & Infra Support' },
+  { label: 'National Emergency Number', number: '112 / 911', scope: 'All Areas · Open 24 Hours' },
+  { label: 'Sendai Coast & Flood Help', number: '+81-22-555-0199', scope: 'Sendai Coast Area' },
+  { label: 'Luzon Emergency Relief Desk', number: '+63-2-555-0144', scope: 'Luzon Area' },
+  { label: 'Scam & Cyber Safety Helpline', number: '+1-800-555-0177', scope: 'Report Fake Links & Online Scams' },
 ];
 
 export const ReliefModule: React.FC<ReliefModuleProps> = ({
@@ -296,7 +297,24 @@ export const ReliefModule: React.FC<ReliefModuleProps> = ({
       {/* Main Grid: Locator & Inventory + Emergency Contact Directory */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         <div className="lg:col-span-8 border border-slate-800 rounded-xl bg-[#0A0F1A] divide-y divide-slate-800 overflow-hidden">
-          {visibleResources.map((res) => {
+          {visibleResources.length === 0 ? (
+            <div className="p-6 text-center space-y-2.5">
+              <p className="text-xs text-slate-400">
+                No hospitals, shelters, or supplies match your search.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setKindFilter('All');
+                  setRegionQuery('');
+                }}
+                className="min-h-[34px] px-3 py-1 text-xs font-medium rounded-lg border border-slate-700 bg-[#0D1422] text-slate-200 hover:bg-slate-800"
+              >
+                Show All Places
+              </button>
+            </div>
+          ) : (
+            visibleResources.map((res) => {
             const Icon = kindIcon(res.kind);
             return (
               <div key={res.id} className="p-4 space-y-3 hover:bg-slate-900/40 transition-colors">
@@ -306,7 +324,7 @@ export const ReliefModule: React.FC<ReliefModuleProps> = ({
                       <Icon className="w-3.5 h-3.5 text-blue-400 shrink-0" aria-hidden="true" />
                       <span className="font-mono text-slate-300">{res.id}</span>
                       <span aria-hidden="true">·</span>
-                      <span>{res.kind}</span>
+                      <span>{plainReliefKind(res.kind)}</span>
                       <span aria-hidden="true">·</span>
                       <span
                         className={`font-semibold ${
@@ -319,7 +337,7 @@ export const ReliefModule: React.FC<ReliefModuleProps> = ({
                             : 'text-red-400'
                         }`}
                       >
-                        {res.status}
+                        {plainReliefStatus(res.status)}
                       </span>
                     </div>
                     <h3 className="text-sm font-semibold text-slate-100">{res.name}</h3>
@@ -327,7 +345,7 @@ export const ReliefModule: React.FC<ReliefModuleProps> = ({
                       <span>{res.region}</span>
                       <span aria-hidden="true">·</span>
                       <span className="text-slate-200 tabular-nums">
-                        Available: {res.quantity.toLocaleString()} {res.unit}
+                        Ready: {res.quantity.toLocaleString()} {res.unit}
                       </span>
                       {(distributedTotals[res.id] || 0) > 0 && (
                         <>
@@ -447,7 +465,8 @@ export const ReliefModule: React.FC<ReliefModuleProps> = ({
                 )}
               </div>
             );
-          })}
+            })
+          )}
         </div>
 
         {/* Emergency Contact Directory (User, Rescue, Admin) */}

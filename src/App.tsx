@@ -31,6 +31,7 @@ import {
   createAlertDoc,
   createIncidentTicket,
   createReliefResourceDoc,
+  deleteAlertDoc,
   isBootstrappedAdminEmail,
   removeAiKnowledgeDoc,
   saveAiKnowledgeDoc,
@@ -90,6 +91,7 @@ import {
   SystemConfigState,
   UserRole,
 } from './types/modules';
+import { plainSeverity } from './utils/plainLabels';
 
 const PORTAL_MODE_KEY = 'nexora_portal_mode';
 
@@ -111,7 +113,7 @@ const POP_MODULES: ModuleMeta[] = [
     num: '01',
     title: 'Command Center',
     shortTitle: 'Command',
-    subtitle: 'Unified situational theater & risk overview',
+    subtitle: 'Live overview, 3D map & quick safety counts',
     imageUrl: '/src/assets/images/module_command_center_1794980254319.jpg',
     imageAlt: 'Disaster and cybersecurity command center bridge with panoramic situational wall',
     roles: ['citizen', 'rescue', 'administrator'],
@@ -120,9 +122,9 @@ const POP_MODULES: ModuleMeta[] = [
   {
     id: 'disaster',
     num: '02',
-    title: 'Disaster Prediction & Monitoring',
-    shortTitle: 'Disaster',
-    subtitle: 'Flood, storm, seismic & early warning maps',
+    title: 'Disaster Warnings & Weather',
+    shortTitle: 'Disasters',
+    subtitle: 'Flood, storm & earthquake alerts in your area',
     imageUrl: '/src/assets/images/module_disaster_monitoring_1794979857261.jpg',
     imageAlt: 'Orbital satellite view of coastal cyclone spiral and terrain',
     roles: ['citizen', 'rescue', 'administrator'],
@@ -131,9 +133,9 @@ const POP_MODULES: ModuleMeta[] = [
   {
     id: 'cyber',
     num: '03',
-    title: 'Cybersecurity & Threat Detection',
-    shortTitle: 'Cyber',
-    subtitle: 'Phishing URL scanner, log audit & containment',
+    title: 'Scam & Link Checker',
+    shortTitle: 'Cyber Safety',
+    subtitle: 'Check if a website link or text message is a scam',
     imageUrl: '/src/assets/images/module_cyber_detection_1794979857655.jpg',
     imageAlt: 'High-security enterprise server corridor with optical fiber links',
     roles: ['citizen', 'rescue', 'administrator'],
@@ -142,9 +144,9 @@ const POP_MODULES: ModuleMeta[] = [
   {
     id: 'assistant',
     num: '04',
-    title: 'NEXORA AI Assistant',
-    shortTitle: 'Nexora AI',
-    subtitle: 'Multilingual guidance, first aid & checklists',
+    title: 'NEXORA AI Helper',
+    shortTitle: 'AI Helper',
+    subtitle: 'Simple safety answers, first aid & checklists',
     imageUrl: '/src/assets/images/module_nexora_assistant_1794979857299.jpg',
     imageAlt: 'Precision smoked glass prisms and titanium compute module',
     roles: ['citizen', 'rescue', 'administrator'],
@@ -153,9 +155,9 @@ const POP_MODULES: ModuleMeta[] = [
   {
     id: 'response',
     num: '05',
-    title: 'Emergency Response & Incident Ops',
-    shortTitle: 'Response',
-    subtitle: 'Incident reporting, damage AI & triage dispatch',
+    title: 'Emergency Help & Reports',
+    shortTitle: 'Help & SOS',
+    subtitle: 'Report an emergency & track rescue teams',
     imageUrl: '/src/assets/images/module_emergency_response_1794979859286.jpg',
     imageAlt: 'Emergency operations dispatch desk with field tablet and tactical radio',
     roles: ['citizen', 'rescue', 'administrator'],
@@ -164,9 +166,9 @@ const POP_MODULES: ModuleMeta[] = [
   {
     id: 'relief',
     num: '06',
-    title: 'Rescue & Relief Management',
-    shortTitle: 'Relief Ops',
-    subtitle: 'Hospitals, shelters, supplies & ambulance fleet',
+    title: 'Hospitals, Shelters & Supplies',
+    shortTitle: 'Help Centers',
+    subtitle: 'Find nearby hospitals, safe shelters & aid',
     imageUrl: '/src/assets/images/module_rescue_relief_1794984084615.jpg',
     imageAlt: 'Tactical medical relief staging hub and emergency ambulance bay',
     roles: ['citizen', 'rescue', 'administrator'],
@@ -175,9 +177,9 @@ const POP_MODULES: ModuleMeta[] = [
   {
     id: 'analytics',
     num: '07',
-    title: 'Data Analytics & Intelligence',
-    shortTitle: 'Analytics',
-    subtitle: 'Trends, exposure metrics & analytical reports',
+    title: 'Charts & Safety Trends',
+    shortTitle: 'Trends',
+    subtitle: 'Easy-to-read charts of disasters & cyber risks',
     imageUrl: '/src/assets/images/module_data_analytics_1794979859044.jpg',
     imageAlt: 'Layered dark translucent glass planes etched with topographic telemetry waves',
     roles: ['citizen', 'rescue', 'administrator'],
@@ -186,9 +188,9 @@ const POP_MODULES: ModuleMeta[] = [
   {
     id: 'alerts',
     num: '08',
-    title: 'Secure Alert & Notification System',
+    title: 'Alerts & Warnings',
     shortTitle: 'Alerts',
-    subtitle: 'Official warnings, SMS/Email channels & history',
+    subtitle: 'Official safety alerts & SMS/email settings',
     imageUrl: '/src/assets/images/module_secure_alerts_1794984085342.jpg',
     imageAlt: 'Encrypted satellite emergency broadcast console in dark command room',
     roles: ['citizen', 'rescue', 'administrator'],
@@ -197,9 +199,9 @@ const POP_MODULES: ModuleMeta[] = [
   {
     id: 'admin',
     num: '09',
-    title: 'Admin & System Management',
+    title: 'Admin Settings',
     shortTitle: 'Admin',
-    subtitle: 'Accounts, roles, AI/API config & audit logs',
+    subtitle: 'Manage user accounts, AI & activity logs',
     imageUrl: '/src/assets/images/module_admin_system_1794984086150.jpg',
     imageAlt: 'Precision enterprise security governance and server rack terminal',
     roles: ['administrator'],
@@ -405,43 +407,20 @@ export default function App() {
   };
 
   useEffect(() => {
+    // Never auto-authenticate from cached browser state on initial load;
+    // always present the Login Portal for explicit role selection & sign-in.
+    localStorage.removeItem(PORTAL_MODE_KEY);
     let settled = false;
     const safetyTimer = window.setTimeout(() => {
       if (!settled) {
         setIsCheckingSession(false);
       }
-    }, 3000);
+    }, 1200);
 
-    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+    const unsubscribe = onAuthStateChanged(auth, () => {
       settled = true;
       window.clearTimeout(safetyTimer);
-
-      if (!fbUser) {
-        localStorage.removeItem(PORTAL_MODE_KEY);
-        setUser(null);
-        setIsCheckingSession(false);
-        return;
-      }
-
-      const savedMode = localStorage.getItem(PORTAL_MODE_KEY);
-      if (
-        savedMode !== 'citizen' &&
-        savedMode !== 'rescue' &&
-        savedMode !== 'administrator'
-      ) {
-        setIsCheckingSession(false);
-        return;
-      }
-
-      try {
-        const { authUser } = await verifyAndSyncUserProfile(fbUser, savedMode);
-        setUser(authUser);
-      } catch {
-        localStorage.removeItem(PORTAL_MODE_KEY);
-        setUser(null);
-      } finally {
-        setIsCheckingSession(false);
-      }
+      setIsCheckingSession(false);
     });
 
     return () => {
@@ -925,10 +904,18 @@ export default function App() {
     try {
       await createAlertDoc(alert, auth.currentUser.uid);
       setAlerts((prev) => [alert, ...prev]);
-      recordAudit('ALERT_CREATED', alert.id, alert.title);
-      setToast(`Created alert draft ${alert.id}.`);
+      recordAudit(
+        alert.status === 'Published' ? 'ALERT_PUBLISHED' : 'ALERT_CREATED',
+        alert.id,
+        alert.title
+      );
+      setToast(
+        alert.status === 'Published'
+          ? `Sent live alert ${alert.id} (${alert.visibility === 'rescue_only' ? 'Rescue Teams' : 'Everyone'}).`
+          : `Saved alert draft ${alert.id}.`
+      );
     } catch (err) {
-      setToast(formatActionError(err, 'Failed to create alert draft.'));
+      setToast(formatActionError(err, 'Failed to create alert.'));
     }
   };
 
@@ -949,6 +936,18 @@ export default function App() {
       setToast(`Alert ${id} marked ${status}.`);
     } catch (err) {
       setToast(formatActionError(err, 'Failed to update alert status.'));
+    }
+  };
+
+  const handleDeleteAlert = async (id: string) => {
+    if (user?.role !== 'administrator') return;
+    try {
+      await deleteAlertDoc(id);
+      setAlerts((prev) => prev.filter((a) => a.id !== id));
+      recordAudit('ALERT_DELETED', id, 'Deleted alert from Firestore');
+      setToast(`Removed alert ${id}.`);
+    } catch (err) {
+      setToast(formatActionError(err, 'Failed to delete alert.'));
     }
   };
 
@@ -1063,7 +1062,7 @@ export default function App() {
           <NexoraLogoCenterpiece />
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg border border-slate-800 bg-[#0C1322]/90 text-xs font-mono text-slate-300">
             <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" aria-hidden="true" />
-            <span>Initializing Nexora ai Operations Session...</span>
+            <span>Initializing NEXORA AI Operations Session...</span>
           </div>
         </div>
       ) : !user ? (
@@ -1088,7 +1087,7 @@ export default function App() {
                 className="text-left flex items-center gap-2.5 min-w-0"
               >
                 <span className="font-display text-sm sm:text-base font-bold tracking-tight text-slate-100 whitespace-nowrap shrink-0">
-                  Nexora <span className="font-medium text-blue-400">ai</span>
+                  NEXORA <span className="font-semibold text-blue-400">AI</span>
                 </span>
                 <span className="hidden xl:inline text-[10px] font-mono uppercase tracking-[0.16em] text-blue-300/75 border-l border-slate-800 pl-2.5">
                   Predict · Protect · Respond · Empower
@@ -1179,42 +1178,50 @@ export default function App() {
                   </span>
                 </button>
 
-                {showNotifPopover && (
-                  <div className="absolute right-0 mt-2 w-72 sm:w-80 rounded-xl border border-slate-700 bg-[#0C1322]/98 shadow-2xl overflow-hidden z-50">
-                    <div className="px-3.5 py-2.5 border-b border-slate-800 flex items-center justify-between text-xs">
-                      <span className="font-semibold text-slate-100">Active Alert Feed</span>
-                      <button
-                        type="button"
-                        onClick={() => navigateTo('alerts')}
-                        className="text-blue-400 hover:text-blue-300 font-medium"
-                      >
-                        View All
-                      </button>
+                {showNotifPopover && (() => {
+                  const popoverAlerts = alerts
+                    .filter((a) => user.role === 'administrator' || a.status === 'Published')
+                    .slice(0, 4);
+                  return (
+                    <div className="absolute right-0 mt-2 w-72 sm:w-80 rounded-xl border border-slate-700 bg-[#0C1322]/98 shadow-2xl overflow-hidden z-50">
+                      <div className="px-3.5 py-2.5 border-b border-slate-800 flex items-center justify-between text-xs">
+                        <span className="font-semibold text-slate-100">Latest Safety Alerts</span>
+                        <button
+                          type="button"
+                          onClick={() => navigateTo('alerts')}
+                          className="text-blue-400 hover:text-blue-300 font-medium"
+                        >
+                          See All
+                        </button>
+                      </div>
+                      <div className="divide-y divide-slate-800 max-h-60 overflow-y-auto">
+                        {popoverAlerts.length === 0 ? (
+                          <div className="px-3.5 py-4 text-center text-xs text-slate-400">
+                            No active alerts right now. You are all caught up.
+                          </div>
+                        ) : (
+                          popoverAlerts.map((a) => (
+                            <button
+                              key={a.id}
+                              type="button"
+                              onClick={() => navigateTo('alerts')}
+                              className="w-full px-3.5 py-2.5 text-left hover:bg-slate-900/70 space-y-0.5"
+                            >
+                              <div className="flex items-center justify-between text-[10px] font-mono">
+                                <span className="text-amber-400">{plainSeverity(a.severity)}</span>
+                                <span className="text-slate-500">{a.createdAtLabel}</span>
+                              </div>
+                              <div className="text-xs font-medium text-slate-100 truncate">
+                                {a.title}
+                              </div>
+                              <div className="text-[11px] text-slate-400 truncate">{a.region}</div>
+                            </button>
+                          ))
+                        )}
+                      </div>
                     </div>
-                    <div className="divide-y divide-slate-800 max-h-60 overflow-y-auto">
-                      {alerts
-                        .filter((a) => user.role === 'administrator' || a.status === 'Published')
-                        .slice(0, 4)
-                        .map((a) => (
-                          <button
-                            key={a.id}
-                            type="button"
-                            onClick={() => navigateTo('alerts')}
-                            className="w-full px-3.5 py-2.5 text-left hover:bg-slate-900/70 space-y-0.5"
-                          >
-                            <div className="flex items-center justify-between text-[10px] font-mono">
-                              <span className="text-amber-400">{a.severity}</span>
-                              <span className="text-slate-500">{a.createdAtLabel}</span>
-                            </div>
-                            <div className="text-xs font-medium text-slate-100 truncate">
-                              {a.title}
-                            </div>
-                            <div className="text-[11px] text-slate-400 truncate">{a.region}</div>
-                          </button>
-                        ))}
-                    </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
 
               <span className="hidden sm:inline truncate max-w-[190px]">
@@ -1261,7 +1268,7 @@ export default function App() {
 
             {/* Left Sidebar Navigation */}
             <aside
-              aria-label="Nexora ai Module Navigation"
+              aria-label="NEXORA AI Module Navigation"
               className={`${
                 mobileNavOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
               } fixed lg:static inset-y-0 left-0 z-40 w-64 shrink-0 border-r border-slate-800/90 bg-[#090E1A]/96 lg:bg-[#090E1A]/85 backdrop-blur-xl flex flex-col justify-between transition-transform duration-200 ease-out pt-14 lg:pt-0`}
@@ -1348,8 +1355,8 @@ export default function App() {
                     <div className="min-w-0">
                       <div className="text-[11px] font-mono text-slate-400">
                         {activeMeta
-                          ? `Nexora ai · Module ${activeMeta.num}`
-                          : 'Nexora ai · Operations Hub'}
+                          ? `NEXORA AI · Module ${activeMeta.num}`
+                          : 'NEXORA AI · Operations Hub'}
                       </div>
                       <h1 className="text-base sm:text-lg font-display font-semibold text-slate-100 truncate">
                         {activeMeta ? activeMeta.title : 'All Operational Modules'}
@@ -1453,6 +1460,7 @@ export default function App() {
                         incidents={incidents}
                         aiKnowledge={aiKnowledge}
                         aiModel={systemConfig.aiModel}
+                        userId={user.id}
                         userRole={user.role}
                         onSaveKnowledge={
                           user.role === 'administrator' ? handleSaveKnowledge : undefined
@@ -1519,6 +1527,9 @@ export default function App() {
                         onUpdateAlertStatus={
                           user.role === 'administrator' ? handleUpdateAlertStatus : undefined
                         }
+                        onDeleteAlert={
+                          user.role === 'administrator' ? handleDeleteAlert : undefined
+                        }
                         onUpdateNotificationPrefs={handleUpdateNotificationPrefs}
                         onOpen3DMap={() => navigateTo('command')}
                       />
@@ -1526,11 +1537,13 @@ export default function App() {
 
                     {activeModule === 'admin' && user.role === 'administrator' && (
                       <AdminSystemModule
+                        currentUser={user}
                         usersList={adminUsers}
                         systemConfig={systemConfig}
                         auditLogs={auditLogs}
                         onUpdateUserAccount={handleUpdateUserAccount}
                         onSaveSystemConfig={handleSaveSystemConfig}
+                        onOpenModule={(id) => navigateTo(id)}
                       />
                     )}
                   </motion.div>

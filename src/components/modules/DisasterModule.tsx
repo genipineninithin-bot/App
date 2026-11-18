@@ -18,6 +18,7 @@ import {
   UserRole,
 } from '../../types/modules';
 import { TacticalGlobe3D } from '../TacticalGlobe3D';
+import { plainDisasterCategory, plainSeverity } from '../../utils/plainLabels';
 
 interface DisasterModuleProps {
   forecasts: DisasterForecast[];
@@ -177,13 +178,13 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
       {/* Top Summary Strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 border border-slate-800 rounded-xl bg-[#0A0F1A] divide-y sm:divide-y-0 sm:divide-x divide-slate-800">
         <div className="p-3.5">
-          <div className="text-[11px] text-slate-400">Monitored Hazards</div>
+          <div className="text-[11px] text-slate-400">Active Warnings</div>
           <div className="mt-1 font-display text-xl font-bold tabular-nums text-slate-100">
             {forecasts.length}
           </div>
         </div>
         <div className="p-3.5">
-          <div className="text-[11px] text-slate-400">High Risk Zones</div>
+          <div className="text-[11px] text-slate-400">High Risk Areas</div>
           <div className="mt-1 font-display text-xl font-bold tabular-nums text-red-400">
             {forecasts.filter((f) => toRiskLevel(f.severity) === 'High').length}
           </div>
@@ -195,7 +196,7 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
           </div>
         </div>
         <div className="p-3.5">
-          <div className="text-[11px] text-slate-400">Grid Load Exposed</div>
+          <div className="text-[11px] text-slate-400">Power Systems at Risk</div>
           <div className="mt-1 font-display text-xl font-bold tabular-nums text-amber-400">
             {forecasts.reduce((acc, f) => acc + f.gridExposureMw, 0).toLocaleString()} MW
           </div>
@@ -217,7 +218,13 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
                     : 'text-slate-400 hover:text-slate-100'
                 }`}
               >
-                {h === 'All' ? 'All Horizons' : h}
+                {h === 'All'
+                  ? 'All Timeframes'
+                  : h === '6h'
+                  ? 'Next 6 Hours'
+                  : h === '24h'
+                  ? 'Next 24 Hours'
+                  : 'Next 3 Days'}
               </button>
             ))}
           </div>
@@ -225,15 +232,15 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            aria-label="Filter disaster category"
+            aria-label="Filter disaster type"
             className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-800 bg-[#0A0F1A] text-slate-200"
           >
-            <option value="All">All Hazards</option>
-            <option value="Flood">Flood Prediction</option>
-            <option value="Cyclone">Cyclone &amp; Storm</option>
-            <option value="Seismic">Seismic</option>
-            <option value="Wildfire">Wildfire</option>
-            <option value="Grid Stress">Grid Stress</option>
+            <option value="All">All Disasters</option>
+            <option value="Flood">Floods</option>
+            <option value="Cyclone">Storms &amp; Cyclones</option>
+            <option value="Seismic">Earthquakes</option>
+            <option value="Wildfire">Wildfires</option>
+            <option value="Grid Stress">Power Grid Issues</option>
           </select>
 
           <select
@@ -242,7 +249,7 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
             aria-label="Filter risk level"
             className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-800 bg-[#0A0F1A] text-slate-200"
           >
-            <option value="All">Risk: All</option>
+            <option value="All">All Risk Levels</option>
             <option value="High">High Risk</option>
             <option value="Medium">Medium Risk</option>
             <option value="Low">Low Risk</option>
@@ -255,7 +262,7 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
             onClick={() => setShowPredictor((v) => !v)}
             className="min-h-[40px] px-3.5 py-2 text-xs font-medium rounded-lg border border-blue-500/50 bg-blue-600/15 text-blue-300 hover:bg-blue-600/25 transition-colors whitespace-nowrap"
           >
-            {showPredictor ? 'Hide Risk Predictor' : 'AI Risk Predictor'}
+            {showPredictor ? 'Hide Risk Calculator' : 'Check Weather Risk'}
           </button>
           {isAdmin && onCreateWarning && (
             <button
@@ -264,7 +271,7 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
               className="min-h-[40px] px-3.5 py-2 text-xs font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-colors flex items-center gap-1.5 whitespace-nowrap"
             >
               <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-              <span>{showWarningForm ? 'Close Generator' : 'Issue Early Warning'}</span>
+              <span>{showWarningForm ? 'Close Form' : 'Send Early Warning'}</span>
             </button>
           )}
           <button
@@ -274,7 +281,7 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
             className="min-h-[40px] px-3.5 py-2 text-xs font-medium rounded-lg border border-slate-700 bg-[#0A0F1A] text-slate-100 hover:bg-slate-800 transition-colors flex items-center gap-1.5 whitespace-nowrap disabled:opacity-60"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} aria-hidden="true" />
-            <span>{isSyncing ? 'Syncing USGS...' : 'Sync Live USGS'}</span>
+            <span>{isSyncing ? 'Checking Earthquakes...' : 'Check Live Earthquakes'}</span>
           </button>
         </div>
       </div>
@@ -284,10 +291,10 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
         <div className="p-4 rounded-xl border border-blue-500/35 bg-[#0A0F1A] space-y-3 text-xs">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="font-semibold text-blue-300">
-              Disaster Risk Prediction Simulator
+              Simple Weather &amp; Disaster Risk Calculator
             </span>
             <span className="text-[11px] font-mono text-slate-400">
-              Demonstration Multi-Factor Environmental Model
+              Sample risk guide based on weather numbers
             </span>
           </div>
 
@@ -311,13 +318,13 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
                 });
                 const data = (await res.json()) as PredictionResult & { error?: string };
                 if (!res.ok) {
-                  setPredError(data.error || `Prediction request failed (${res.status}).`);
+                  setPredError(data.error || `Risk check failed (${res.status}).`);
                 } else {
                   setPredResult(data);
                 }
               } catch (err: unknown) {
                 setPredError(
-                  err instanceof Error ? err.message : 'Unable to reach prediction service.'
+                  err instanceof Error ? err.message : 'Unable to reach risk calculator right now.'
                 );
               } finally {
                 setPredLoading(false);
@@ -334,14 +341,14 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
                   className="w-full min-h-[38px] px-2.5 rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100"
                 >
                   <option value="Flood">Flood</option>
-                  <option value="Cyclone">Cyclone</option>
+                  <option value="Cyclone">Storm / Cyclone</option>
                   <option value="Wildfire">Wildfire</option>
-                  <option value="Seismic">Seismic</option>
-                  <option value="Grid Stress">Grid Stress</option>
+                  <option value="Seismic">Earthquake</option>
+                  <option value="Grid Stress">Power Grid Issue</option>
                 </select>
               </label>
               <label className="space-y-1 sm:col-span-2">
-                <span className="text-[11px] text-slate-400 block">Location</span>
+                <span className="text-[11px] text-slate-400 block">City or Area</span>
                 <input
                   type="text"
                   value={predLocation}
@@ -361,7 +368,7 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
                 />
               </label>
               <label className="space-y-1">
-                <span className="text-[11px] text-slate-400 block">Temp (°C) / Hum (%)</span>
+                <span className="text-[11px] text-slate-400 block">Temp (°C) / Humidity (%)</span>
                 <div className="flex gap-1">
                   <input
                     type="number"
@@ -398,7 +405,7 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
                 disabled={predLoading}
                 className="min-h-[38px] px-4 py-1.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-50"
               >
-                {predLoading ? 'Evaluating Telemetry...' : 'Predict Risk'}
+                {predLoading ? 'Checking Risk...' : 'Check Risk Level'}
               </button>
             </div>
           </form>
@@ -425,14 +432,14 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
                     {predResult.riskLevel} Risk ({predResult.riskScore}/100)
                   </span>
                   <span className="font-mono text-slate-400">
-                    Confidence: {predResult.confidencePct}%
+                    Model Certainty: {predResult.confidencePct}%
                   </span>
                 </div>
                 <span className="text-[11px] font-mono text-slate-500">{predResult.modelLabel}</span>
               </div>
               <p className="text-slate-200">{predResult.explanation}</p>
               <div className="text-[11px] font-mono text-slate-400">
-                Factors: {predResult.factors.join(' · ')}
+                Why: {predResult.factors.join(' · ')}
               </div>
               <ul className="list-disc pl-4 space-y-0.5 text-slate-300">
                 {predResult.precautions.map((p, i) => (
@@ -649,9 +656,9 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
           <div className="px-4 py-2.5 border-b border-slate-800 flex items-center justify-between text-xs">
             <span className="font-semibold text-slate-100 inline-flex items-center gap-1.5">
               <CloudRain className="w-3.5 h-3.5 text-sky-400" aria-hidden="true" />
-              Rainfall, Flood &amp; Storm Stations
+              Rain, Flood &amp; Storm Stations
             </span>
-            <span className="text-[11px] font-mono text-slate-400">Live METAR</span>
+            <span className="text-[11px] font-mono text-slate-400">Live Weather Readings</span>
           </div>
           <div className="divide-y divide-slate-800">
             {WEATHER_STATIONS.map((ws) => (
@@ -659,7 +666,7 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
                 <div className="min-w-0">
                   <div className="font-medium text-slate-100 truncate">{ws.region}</div>
                   <div className="text-[11px] font-mono tabular-nums text-slate-400">
-                    {ws.rainfallMmH} mm/h · {ws.windKmh} km/h · {ws.pressureHpa} hPa
+                    Rain: {ws.rainfallMmH} mm/h · Wind: {ws.windKmh} km/h · Pressure: {ws.pressureHpa} hPa
                   </div>
                 </div>
                 <span
@@ -681,53 +688,72 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
 
       {/* Forecast List */}
       <div className="divide-y divide-slate-800 border border-slate-800 rounded-xl bg-[#0A0F1A] overflow-hidden">
-        {filtered.map((f) => {
-          const risk = toRiskLevel(f.severity);
-          return (
-            <div
-              key={f.id}
-              className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-900/60 transition-colors"
+        {filtered.length === 0 ? (
+          <div className="p-6 text-center space-y-2.5">
+            <p className="text-xs text-slate-400">
+              No disaster warnings match your selected filters.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setHorizon('All');
+                setCategory('All');
+                setRiskFilter('All');
+              }}
+              className="min-h-[34px] px-3 py-1 text-xs font-medium rounded-lg border border-slate-700 bg-[#0D1422] text-slate-200 hover:bg-slate-800"
             >
-              <div className="min-w-0 space-y-1.5">
-                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                  <span className="font-mono text-slate-300">{f.id}</span>
-                  <span aria-hidden="true">·</span>
-                  <span>{f.category}</span>
-                  <span aria-hidden="true">·</span>
-                  <span className={`font-semibold inline-flex items-center gap-1 ${severityColor(f.severity)}`}>
-                    <AlertTriangle className="w-3 h-3" aria-hidden="true" />
-                    {risk} Risk ({f.severity})
-                  </span>
-                  <span aria-hidden="true">·</span>
-                  <span className="font-mono tabular-nums">{f.confidencePct}% confidence</span>
+              Show All Warnings
+            </button>
+          </div>
+        ) : (
+          filtered.map((f) => {
+            const risk = toRiskLevel(f.severity);
+            return (
+              <div
+                key={f.id}
+                className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-900/60 transition-colors"
+              >
+                <div className="min-w-0 space-y-1.5">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                    <span className="font-mono text-slate-300">{f.id}</span>
+                    <span aria-hidden="true">·</span>
+                    <span>{plainDisasterCategory(f.category)}</span>
+                    <span aria-hidden="true">·</span>
+                    <span className={`font-semibold inline-flex items-center gap-1 ${severityColor(f.severity)}`}>
+                      <AlertTriangle className="w-3 h-3" aria-hidden="true" />
+                      {plainSeverity(f.severity)} ({risk} Risk)
+                    </span>
+                    <span aria-hidden="true">·</span>
+                    <span className="font-mono tabular-nums">{f.confidencePct}% match</span>
+                  </div>
+
+                  <h3 className="text-sm font-semibold text-slate-100">{f.title}</h3>
+                  <p className="text-xs text-slate-400 leading-relaxed">{f.summary}</p>
+
+                  <div className="flex flex-wrap items-center gap-3 text-[11px] font-mono tabular-nums text-slate-400 pt-0.5">
+                    <span>{f.region}</span>
+                    <span aria-hidden="true">·</span>
+                    <span className="text-slate-200">{f.metric}</span>
+                    <span aria-hidden="true">·</span>
+                    <span>{f.gridExposureMw} MW power load</span>
+                  </div>
                 </div>
 
-                <h3 className="text-sm font-semibold text-slate-100">{f.title}</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">{f.summary}</p>
-
-                <div className="flex flex-wrap items-center gap-3 text-[11px] font-mono tabular-nums text-slate-400 pt-0.5">
-                  <span>{f.region}</span>
-                  <span aria-hidden="true">·</span>
-                  <span className="text-slate-200">{f.metric}</span>
-                  <span aria-hidden="true">·</span>
-                  <span>{f.gridExposureMw} MW exposed</span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => onEscalate(f)}
+                    disabled={f.status === 'Escalated'}
+                    className="min-h-[40px] px-3.5 py-2 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:bg-slate-800 disabled:text-slate-400 transition-colors flex items-center gap-1.5 whitespace-nowrap"
+                  >
+                    <span>{f.status === 'Escalated' ? 'Sent to Rescue' : 'Send to Rescue Team'}</span>
+                    {f.status !== 'Escalated' && <ArrowUpRight className="w-3.5 h-3.5" aria-hidden="true" />}
+                  </button>
                 </div>
               </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => onEscalate(f)}
-                  disabled={f.status === 'Escalated'}
-                  className="min-h-[40px] px-3.5 py-2 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:bg-slate-800 disabled:text-slate-400 transition-colors flex items-center gap-1.5 whitespace-nowrap"
-                >
-                  <span>{f.status === 'Escalated' ? 'Escalated' : 'Escalate to Response'}</span>
-                  {f.status !== 'Escalated' && <ArrowUpRight className="w-3.5 h-3.5" aria-hidden="true" />}
-                </button>
-              </div>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </div>
 
       {/* Historical Disaster Analysis (Citizen & Admin only) */}

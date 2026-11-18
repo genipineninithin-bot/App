@@ -159,7 +159,7 @@ export const NexoraBackground: React.FC = () => {
 export const NexoraLogoCenterpiece: React.FC = () => {
   return (
     <div className="pointer-events-none relative z-10 flex flex-col items-center text-center select-none px-4 py-4 sm:py-6 lg:py-2">
-      <div className="flex flex-col items-center opacity-55 transition-opacity duration-300">
+      <div className="flex flex-col items-center opacity-90 transition-opacity duration-300">
         <svg
           width="88"
           height="88"
@@ -211,10 +211,10 @@ export const NexoraLogoCenterpiece: React.FC = () => {
           <circle cx="32" cy="64" r="2.5" fill="#f8fafc" fillOpacity="0.9" />
         </svg>
 
-        <h1 className="font-display text-2xl sm:text-4xl lg:text-[42px] font-bold tracking-tight text-slate-100/90 leading-none">
-          Nexora <span className="font-medium text-blue-400/90">ai</span>
+        <h1 className="font-display text-2xl sm:text-4xl lg:text-[42px] font-bold tracking-tight text-slate-100 leading-none">
+          NEXORA <span className="font-semibold text-blue-400">AI</span>
         </h1>
-        <p className="mt-1.5 text-[10px] sm:text-[11px] font-mono tracking-[0.18em] uppercase text-blue-300/80">
+        <p className="mt-1.5 text-[10px] sm:text-[11px] font-mono tracking-[0.18em] uppercase text-blue-300/90">
           Predict. Protect. Respond. Empower.
         </p>
       </div>

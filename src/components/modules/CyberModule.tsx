@@ -10,6 +10,12 @@ import {
   Upload,
 } from 'lucide-react';
 import { CyberThreat, UserRole } from '../../types/modules';
+import {
+  formatUrlBreakdownItem,
+  plainSeverity,
+  plainThreatStatus,
+  plainThreatVector,
+} from '../../utils/plainLabels';
 
 interface CyberModuleProps {
   threats: CyberThreat[];
@@ -155,7 +161,7 @@ export const CyberModule: React.FC<CyberModuleProps> = ({
                 : 'text-slate-400 hover:text-slate-100'
             }`}
           >
-            Link &amp; Phishing Analyzer
+            Check Link or Message
           </button>
 
           {isAdmin && (
@@ -169,7 +175,7 @@ export const CyberModule: React.FC<CyberModuleProps> = ({
                     : 'text-slate-400 hover:text-slate-100'
                 }`}
               >
-                Active Detections ({threats.filter((t) => t.status !== 'Contained').length})
+                Active Cyber Warnings ({threats.filter((t) => t.status !== 'Contained').length})
               </button>
               <button
                 type="button"
@@ -183,7 +189,7 @@ export const CyberModule: React.FC<CyberModuleProps> = ({
                     : 'text-slate-400 hover:text-slate-100'
                 }`}
               >
-                Network Log Analysis
+                Check System Logs
               </button>
               <button
                 type="button"
@@ -194,7 +200,7 @@ export const CyberModule: React.FC<CyberModuleProps> = ({
                     : 'text-slate-400 hover:text-slate-100'
                 }`}
               >
-                History &amp; Analytics
+                Past Warnings &amp; Stats
               </button>
             </>
           )}
@@ -202,10 +208,10 @@ export const CyberModule: React.FC<CyberModuleProps> = ({
 
         <span className="text-xs font-mono text-slate-400">
           {isAdmin
-            ? 'Full SOC & Network Telemetry'
+            ? 'Full Cyber & Network Protection'
             : userRole === 'rescue'
-            ? 'Field Malicious Link Verification'
-            : 'Phishing, Link & Threat Severity Scanner'}
+            ? 'Check Field Links Before Opening'
+            : 'Check if a Website Link or Text is a Scam'}
         </span>
       </div>
 
@@ -227,7 +233,7 @@ export const CyberModule: React.FC<CyberModuleProps> = ({
                 }`}
               >
                 <Link2 className="w-3.5 h-3.5" aria-hidden="true" />
-                <span>Malicious / Phishing URL</span>
+                <span>Check Website Link</span>
               </button>
 
               {showPhishingAndScoring && (
@@ -244,7 +250,7 @@ export const CyberModule: React.FC<CyberModuleProps> = ({
                   }`}
                 >
                   <MailWarning className="w-3.5 h-3.5" aria-hidden="true" />
-                  <span>Suspicious Email / SMS</span>
+                  <span>Check Email or SMS</span>
                 </button>
               )}
 
@@ -262,7 +268,7 @@ export const CyberModule: React.FC<CyberModuleProps> = ({
                   }`}
                 >
                   <Terminal className="w-3.5 h-3.5" aria-hidden="true" />
-                  <span>Network / Firewall Log</span>
+                  <span>Firewall / Server Log</span>
                 </button>
               )}
             </div>
@@ -280,7 +286,7 @@ export const CyberModule: React.FC<CyberModuleProps> = ({
               }
               className="text-xs text-blue-400 hover:text-blue-300 underline"
             >
-              Load Sample Artifact
+              Try an Example
             </button>
           </div>
 
@@ -291,20 +297,20 @@ export const CyberModule: React.FC<CyberModuleProps> = ({
               onChange={(e) => setPayload(e.target.value)}
               placeholder={
                 scanKind === 'url'
-                  ? 'Paste a suspicious URL or shortlink to inspect...'
+                  ? 'Paste a website link here to check if it is safe...'
                   : scanKind === 'message'
-                  ? 'Paste suspicious SMS, WhatsApp, or email text for phishing analysis...'
-                  : 'Paste raw firewall, syslog, or IEC-104 packet captures for anomaly detection...'
+                  ? 'Paste a suspicious text message, WhatsApp, or email here...'
+                  : 'Paste firewall or server log text here to check for unusual traffic...'
               }
               className="w-full p-3 text-xs sm:text-sm rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600"
             />
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-[11px] font-mono text-slate-400">
-                <span>Passive analysis only · Submitted links are never executed or visited</span>
+                <span>Safe check only — links are never opened on your device</span>
                 {scanKind === 'log' && (
                   <label className="min-h-[32px] px-2.5 py-1 rounded-md border border-slate-700 bg-[#0D1422] text-slate-200 hover:border-blue-500 cursor-pointer inline-flex items-center gap-1.5">
                     <Upload className="w-3 h-3 text-blue-400" aria-hidden="true" />
-                    <span>{csvFileName ? csvFileName : 'Upload CSV / Log'}</span>
+                    <span>{csvFileName ? csvFileName : 'Upload Log File'}</span>
                     <input
                       type="file"
                       accept=".csv,.log,.txt"
@@ -320,7 +326,7 @@ export const CyberModule: React.FC<CyberModuleProps> = ({
                 className="min-h-[40px] px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
               >
                 <Search className="w-3.5 h-3.5" aria-hidden="true" />
-                <span>{isAnalyzing ? 'Analyzing Artifact...' : 'Run Threat Analysis'}</span>
+                <span>{isAnalyzing ? 'Checking Safety...' : 'Check Safety Now'}</span>
               </button>
             </div>
           </form>
@@ -335,7 +341,7 @@ export const CyberModule: React.FC<CyberModuleProps> = ({
             <div className="p-4 rounded-xl border border-slate-800 bg-[#0D1422] space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2 text-xs">
-                  <span className="text-slate-400">Verdict:</span>
+                  <span className="text-slate-400">Result:</span>
                   <span
                     className={`font-semibold ${
                       scanResult.verdict === 'Malicious'
@@ -345,15 +351,19 @@ export const CyberModule: React.FC<CyberModuleProps> = ({
                         : 'text-emerald-400'
                     }`}
                   >
-                    {scanResult.verdict}
+                    {scanResult.verdict === 'Malicious'
+                      ? 'Danger — Likely Scam or Virus'
+                      : scanResult.verdict === 'Suspicious'
+                      ? 'Be Careful — Looks Suspicious'
+                      : 'Safe — Looks Okay'}
                   </span>
                   <span className="text-slate-600" aria-hidden="true">·</span>
-                  <span className="text-slate-300">{scanResult.severity} Severity</span>
+                  <span className="text-slate-300">{plainSeverity(scanResult.severity)}</span>
                 </div>
 
                 {showPhishingAndScoring && (
                   <div className="text-xs font-mono tabular-nums text-slate-200">
-                    Threat Severity Score:{' '}
+                    Danger Score:{' '}
                     <span
                       className={
                         scanResult.riskScore >= 70
@@ -392,10 +402,10 @@ export const CyberModule: React.FC<CyberModuleProps> = ({
 
               {typeof scanResult.phishingProbability === 'number' && (
                 <div className="text-xs font-mono text-amber-300">
-                  Phishing Probability: {scanResult.phishingProbability}%
+                  Scam Chance: {scanResult.phishingProbability}%
                   {scanResult.suspiciousKeywords && scanResult.suspiciousKeywords.length > 0 && (
                     <span className="text-slate-400 ml-2">
-                      · Keywords: {scanResult.suspiciousKeywords.join(', ')}
+                      · Warning Words: {scanResult.suspiciousKeywords.join(', ')}
                     </span>
                   )}
                 </div>
@@ -403,16 +413,22 @@ export const CyberModule: React.FC<CyberModuleProps> = ({
 
               {scanResult.urlBreakdown && (
                 <div className="p-2.5 rounded-lg border border-slate-800 bg-[#0A0F1A] text-[11px] font-mono text-slate-400 flex flex-wrap gap-3">
-                  {Object.entries(scanResult.urlBreakdown).map(([k, v]) => (
-                    <span key={k}>
-                      {k}: <strong className="text-slate-200">{String(v)}</strong>
-                    </span>
-                  ))}
+                  {Object.entries(scanResult.urlBreakdown).map(([k, v]) => {
+                    const item = formatUrlBreakdownItem(k, v);
+                    return (
+                      <span key={k}>
+                        {item.label}:{' '}
+                        <strong className={item.warn ? 'text-amber-300' : 'text-slate-200'}>
+                          {item.display}
+                        </strong>
+                      </span>
+                    );
+                  })}
                 </div>
               )}
 
               <div className="pt-2 border-t border-slate-800 text-xs text-blue-300">
-                Recommendation: {scanResult.recommendation}
+                What You Should Do: {scanResult.recommendation}
               </div>
             </div>
           )}
@@ -454,84 +470,99 @@ export const CyberModule: React.FC<CyberModuleProps> = ({
                       : 'text-slate-400 hover:text-slate-100'
                   }`}
                 >
-                  {vec}
+                  {vec === 'All' ? 'All Threats' : plainThreatVector(vec)}
                 </button>
               )
             )}
           </div>
 
           <div className="divide-y divide-slate-800 border border-slate-800 rounded-xl bg-[#0A0F1A] overflow-hidden">
-            {filteredThreats.map((t) => {
-              const isContained = t.status === 'Contained';
-              return (
-                <div
-                  key={t.id}
-                  className="p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4 hover:bg-slate-900/60 transition-colors"
-                >
-                  <div className="min-w-0 space-y-1.5">
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                      <span className="font-mono text-slate-300">{t.id}</span>
-                      <span aria-hidden="true">·</span>
-                      <span>{t.vector}</span>
-                      <span aria-hidden="true">·</span>
-                      <span>{t.platform}</span>
-                      <span aria-hidden="true">·</span>
-                      <span className="font-mono">MITRE {t.mitreId}</span>
-                      <span aria-hidden="true">·</span>
-                      <span
-                        className={`font-semibold inline-flex items-center gap-1 ${
-                          isContained
-                            ? 'text-emerald-400'
-                            : t.severity === 'Critical'
-                            ? 'text-red-400'
-                            : 'text-amber-400'
-                        }`}
-                      >
-                        {isContained ? (
-                          <ShieldCheck className="w-3.5 h-3.5" aria-hidden="true" />
-                        ) : (
-                          <ShieldAlert className="w-3.5 h-3.5" aria-hidden="true" />
+            {filteredThreats.length === 0 ? (
+              <div className="p-6 text-center space-y-2">
+                <p className="text-xs text-slate-400">No active cyber threats match this filter.</p>
+                {vectorFilter !== 'All' && (
+                  <button
+                    type="button"
+                    onClick={() => setVectorFilter('All')}
+                    className="min-h-[34px] px-3 py-1 text-xs font-medium rounded-lg border border-slate-700 bg-[#0D1422] text-slate-200 hover:bg-slate-800"
+                  >
+                    Show All Threats
+                  </button>
+                )}
+              </div>
+            ) : (
+              filteredThreats.map((t) => {
+                const isContained = t.status === 'Contained';
+                return (
+                  <div
+                    key={t.id}
+                    className="p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4 hover:bg-slate-900/60 transition-colors"
+                  >
+                    <div className="min-w-0 space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                        <span className="font-mono text-slate-300">{t.id}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{plainThreatVector(t.vector)}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{t.platform}</span>
+                        <span aria-hidden="true">·</span>
+                        <span
+                          className={`font-semibold inline-flex items-center gap-1 ${
+                            isContained
+                              ? 'text-emerald-400'
+                              : t.severity === 'Critical'
+                              ? 'text-red-400'
+                              : 'text-amber-400'
+                          }`}
+                        >
+                          {isContained ? (
+                            <ShieldCheck className="w-3.5 h-3.5" aria-hidden="true" />
+                          ) : (
+                            <ShieldAlert className="w-3.5 h-3.5" aria-hidden="true" />
+                          )}
+                          {isContained
+                            ? 'Blocked & Safe'
+                            : `${plainSeverity(t.severity)} · ${plainThreatStatus(t.status)}`}
+                        </span>
+                      </div>
+
+                      <h3 className="text-sm font-semibold text-slate-100">{t.title}</h3>
+                      <p className="text-xs text-slate-400 leading-relaxed">{t.summary}</p>
+
+                      <div className="flex flex-wrap items-center gap-3 text-[11px] font-mono text-slate-400 pt-0.5">
+                        <span className="text-red-300">Clue: {t.ioc}</span>
+                        <span aria-hidden="true">·</span>
+                        <span className="tabular-nums">{t.affectedHosts} devices</span>
+                        {t.linkedDisasterId && (
+                          <>
+                            <span aria-hidden="true">·</span>
+                            <span className="text-amber-300">Linked Warning: {t.linkedDisasterId}</span>
+                          </>
                         )}
-                        {isContained ? 'Contained' : `${t.severity} · ${t.status}`}
-                      </span>
+                      </div>
                     </div>
 
-                    <h3 className="text-sm font-semibold text-slate-100">{t.title}</h3>
-                    <p className="text-xs text-slate-400 leading-relaxed">{t.summary}</p>
-
-                    <div className="flex flex-wrap items-center gap-3 text-[11px] font-mono text-slate-400 pt-0.5">
-                      <span className="text-red-300">IOC: {t.ioc}</span>
-                      <span aria-hidden="true">·</span>
-                      <span className="tabular-nums">{t.affectedHosts} endpoints</span>
-                      {t.linkedDisasterId && (
-                        <>
-                          <span aria-hidden="true">·</span>
-                          <span className="text-amber-300">Linked: {t.linkedDisasterId}</span>
-                        </>
-                      )}
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => onEscalateThreat(t)}
+                        className="min-h-[40px] px-3 py-2 text-xs font-medium rounded-lg border border-slate-700 text-slate-200 hover:bg-slate-800 transition-colors whitespace-nowrap"
+                      >
+                        Create Report
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onContainThreat(t.id)}
+                        disabled={isContained}
+                        className="min-h-[40px] px-3.5 py-2 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:bg-slate-800 disabled:text-emerald-400 transition-colors whitespace-nowrap"
+                      >
+                        {isContained ? 'Blocked & Safe' : 'Block & Make Safe'}
+                      </button>
                     </div>
                   </div>
-
-                  <div className="flex flex-wrap items-center gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => onEscalateThreat(t)}
-                      className="min-h-[40px] px-3 py-2 text-xs font-medium rounded-lg border border-slate-700 text-slate-200 hover:bg-slate-800 transition-colors whitespace-nowrap"
-                    >
-                      Open Ticket
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onContainThreat(t.id)}
-                      disabled={isContained}
-                      className="min-h-[40px] px-3.5 py-2 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:bg-slate-800 disabled:text-emerald-400 transition-colors whitespace-nowrap"
-                    >
-                      {isContained ? 'Contained' : 'Isolate & Contain'}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </div>
       )}
@@ -542,17 +573,17 @@ export const CyberModule: React.FC<CyberModuleProps> = ({
           <div className="lg:col-span-5 border border-slate-800 rounded-xl bg-[#0A0F1A] p-4 space-y-3">
             <div className="flex items-center gap-2 text-xs font-semibold text-slate-100">
               <Activity className="w-4 h-4 text-blue-400" aria-hidden="true" />
-              <span>Cybersecurity Analytics Summary</span>
+              <span>Safety Summary</span>
             </div>
             <div className="divide-y divide-slate-800 text-xs">
               <div className="py-2 flex justify-between">
-                <span className="text-slate-400">Total Endpoints Protected</span>
+                <span className="text-slate-400">Devices Protected</span>
                 <span className="font-mono tabular-nums text-slate-100">
                   {threats.reduce((sum, t) => sum + t.affectedHosts, 0)}
                 </span>
               </div>
               <div className="py-2 flex justify-between">
-                <span className="text-slate-400">Containment Rate</span>
+                <span className="text-slate-400">Threats Blocked</span>
                 <span className="font-mono tabular-nums text-emerald-400">
                   {Math.round(
                     (threats.filter((t) => t.status === 'Contained').length /
@@ -563,7 +594,7 @@ export const CyberModule: React.FC<CyberModuleProps> = ({
                 </span>
               </div>
               <div className="py-2 flex justify-between">
-                <span className="text-slate-400">Critical Severity Vectors</span>
+                <span className="text-slate-400">Danger Now Threats</span>
                 <span className="font-mono tabular-nums text-red-400">
                   {threats.filter((t) => t.severity === 'Critical').length}
                 </span>
@@ -573,29 +604,35 @@ export const CyberModule: React.FC<CyberModuleProps> = ({
 
           <div className="lg:col-span-7 border border-slate-800 rounded-xl bg-[#0A0F1A] overflow-hidden">
             <div className="px-4 py-3 border-b border-slate-800 text-xs font-semibold text-slate-100">
-              Security Incident Containment History
+              Resolved &amp; Blocked Cyber Warnings
             </div>
             <div className="divide-y divide-slate-800">
-              {containedHistory.map((item) => (
-                <div key={item.id} className="px-4 py-3 flex items-center justify-between gap-3 text-xs">
-                  <div className="min-w-0">
-                    <div className="font-medium text-slate-100 truncate">
-                      <span className="font-mono text-slate-400 mr-2">{item.id}</span>
-                      {item.title}
-                    </div>
-                    <div className="text-[11px] font-mono text-slate-400 truncate">
-                      {item.vector} · {item.platform} · IOC {item.ioc}
-                    </div>
-                  </div>
-                  <span
-                    className={`font-mono shrink-0 ${
-                      item.status === 'Contained' ? 'text-emerald-400' : 'text-amber-400'
-                    }`}
-                  >
-                    {item.status}
-                  </span>
+              {containedHistory.length === 0 ? (
+                <div className="p-4 text-xs text-slate-400">
+                  No cyber warnings have been blocked yet.
                 </div>
-              ))}
+              ) : (
+                containedHistory.map((item) => (
+                  <div key={item.id} className="px-4 py-3 flex items-center justify-between gap-3 text-xs">
+                    <div className="min-w-0">
+                      <div className="font-medium text-slate-100 truncate">
+                        <span className="font-mono text-slate-400 mr-2">{item.id}</span>
+                        {item.title}
+                      </div>
+                      <div className="text-[11px] font-mono text-slate-400 truncate">
+                        {plainThreatVector(item.vector)} · {item.platform} · {item.ioc}
+                      </div>
+                    </div>
+                    <span
+                      className={`font-mono shrink-0 ${
+                        item.status === 'Contained' ? 'text-emerald-400' : 'text-amber-400'
+                      }`}
+                    >
+                      {plainThreatStatus(item.status)}
+                    </span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>

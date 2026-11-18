@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,6 +13,7 @@ const isProduction = process.env.NODE_ENV === 'production';
 interface AssistantMessage {
   role: 'user' | 'assistant';
   content: string;
+  text?: string;
 }
 
 interface AssistantRequestBody {
@@ -20,8 +21,32 @@ interface AssistantRequestBody {
   contextSummary?: string;
   language?: string;
   knowledgeBase?: string;
+  userRole?: 'citizen' | 'rescue' | 'administrator';
+  emergencyMode?: boolean;
   model?: string;
 }
+
+const NEXORA_TRAINING_PLAYBOOK = `
+NEXORA AI PLATFORM TRAINING & OPERATIONAL KNOWLEDGE:
+- Platform Identity: NEXORA AI ("Predict. Protect. Respond. Empower.") — an integrated AI disaster prediction, emergency response, 3D geospatial mapping, and cybersecurity intelligence platform.
+- Module Directory (guide users to exact module when helpful):
+  * Module 01 (Command Center & 3D Globe): Live disaster/cyber overview, 3D tactical globe showing disaster risk zones, alerts, and incident pins.
+  * Module 02 (Disaster Prediction & Monitoring): Environmental risk scoring (Flood, Cyclone, Wildfire, Seismic, Grid Stress) + live USGS M4.5+ seismic feed sync.
+  * Module 03 (Cybersecurity & Threat Detection): Passive phishing URL/SMS/log analyzer, MITRE ATT&CK telemetry, containment queue.
+  * Module 04 (NEXORA AI Assistant): Multilingual preparedness, first-aid, triage, cyber defense, safety checklists, and custom SOP training knowledge base.
+  * Module 05 (Emergency Response & Incident Ops): Citizen SOS reporting, pre/post imagery damage assessment, START patient triage, and rescue unit dispatch.
+  * Module 06 (Rescue & Relief Management): Hospitals, open ICU/trauma beds, evacuation shelters, potable water/supply packs, and ambulance fleets.
+  * Module 07 (Data Analytics & Intelligence): 24h incident & cyber mitigation trends and exportable intelligence briefs.
+  * Module 08 (Secure Alert & Notification System): Official verified hazard/cyber alerts and SMS/Email notification preferences.
+  * Module 09 (Admin & System Management): RBAC user governance, AI model config, and immutable audit logs.
+- Core Domain Protocols:
+  * Flood: Never walk/drive in floodwaters; 15cm sweeps adults, 30cm floats cars. Move to higher floors/elevation, shut off main power breakers if water enters premises, avoid downed lines.
+  * Seismic & Tsunami: Drop, Cover, Hold On. After shaking stops, evacuate coastal zones >=30m elevation or >=2km inland without waiting for sirens; check gas odors before shutting valves.
+  * Cyclone: Evacuate storm-surge zones early, shelter in interior windowless rooms, avoid venturing out during the calm eye.
+  * Wildfire: Follow evacuation orders immediately, seal vents, use N95/P100 masks for smoke, keep access roads clear for fire units.
+  * First Aid & START Triage: Severe bleeding -> firm direct pressure + tourniquet 5cm above limb hemorrhage (record time). Burns -> 20min cool running water (no ice). START triage -> Green (ambulatory), Red-Immediate (RR>30, cap refill>2s, no radial pulse, unable to follow commands), Yellow-Delayed, Black-Expectant. Always advise dialing 112/911 for life-threatening emergencies; clarify this is guidance, not a medical diagnosis.
+  * Cybersecurity: Never tap unknown APK/relief links in SMS/WhatsApp; verify exact domain spelling and HTTPS; isolate compromised OT/SCADA or CAD endpoints onto clean VLANs; scan suspect links in Module 03.
+`.trim();
 
 const DEFAULT_GEMINI_MODEL = 'gemini-4-hydrogen';
 const ALLOWED_GEMINI_MODELS = new Set(['gemini-4-hydrogen', 'gemini-3.1-flash-lite']);
@@ -40,9 +65,12 @@ function parseFiniteNum(val: unknown, fallback: number): number {
 }
 
 function getGeminiClient(): GoogleGenAI {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error('GEMINI_API_KEY is not configured in the server environment.');
+  const rawKey = process.env.GEMINI_API_KEY || '';
+  const apiKey = rawKey.trim().replace(/^["']|["']$/g, '');
+  if (!apiKey || /^MY_GEMINI/i.test(apiKey)) {
+    throw new Error(
+      'GEMINI_API_KEY is not configured in the server environment. Please add a valid key in Settings > Secrets.'
+    );
   }
   return new GoogleGenAI({
     apiKey,
@@ -56,7 +84,12 @@ function getGeminiClient(): GoogleGenAI {
 
 function isTransientCapacityError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err || '');
-  return /503|UNAVAILABLE|high demand|RESOURCE_EXHAUSTED|429|overloaded/i.test(msg);
+  return /503|UNAVAILABLE|high demand|RESOURCE_EXHAUSTED|429|overloaded|ETIMEDOUT|ECONNRESET|fetch failed/i.test(msg);
+}
+
+function isAuthOrKeyError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err || '');
+  return /GEMINI_API_KEY|API key not valid|API_KEY_INVALID|API_KEY_EXPIRED|PERMISSION_DENIED|UNAUTHENTICATED|API key expired/i.test(msg);
 }
 
 function formatGeminiError(err: unknown, fallbackMsg: string): { statusCode: number; message: string } {
@@ -73,8 +106,25 @@ function formatGeminiError(err: unknown, fallbackMsg: string): { statusCode: num
   } catch {
     // keep raw message
   }
+  if (/API key not valid|API_KEY_INVALID|API_KEY_EXPIRED|PERMISSION_DENIED|UNAUTHENTICATED|API key expired/i.test(cleanMessage)) {
+    return {
+      statusCode: 400,
+      message:
+        'Gemini API key is invalid or expired. Please generate a new key in Google AI Studio and update GEMINI_API_KEY in Settings > Secrets.',
+    };
+  }
   const statusCode = isTransientCapacityError(raw) ? 503 : 500;
   return { statusCode, message: cleanMessage || fallbackMsg };
+}
+
+function applyFastModelConfig<
+  T extends Omit<Parameters<GoogleGenAI['models']['generateContent']>[0], 'model'>
+>(model: string, params: T): T {
+  const baseConfig = { ...(params.config || {}) };
+  if (model === 'gemini-4-hydrogen' && !baseConfig.thinkingConfig) {
+    baseConfig.thinkingConfig = { thinkingLevel: ThinkingLevel.LOW };
+  }
+  return { ...params, config: baseConfig };
 }
 
 async function generateWithFallback(
@@ -84,13 +134,110 @@ async function generateWithFallback(
 ) {
   const primaryModel = resolveGeminiModel(requestedModel);
   try {
-    return await ai.models.generateContent({ model: primaryModel, ...params });
+    return await ai.models.generateContent({
+      model: primaryModel,
+      ...applyFastModelConfig(primaryModel, params),
+    });
   } catch (err) {
-    if (primaryModel !== 'gemini-3.1-flash-lite' && isTransientCapacityError(err)) {
-      return await ai.models.generateContent({ model: 'gemini-3.1-flash-lite', ...params });
+    if (primaryModel !== 'gemini-3.1-flash-lite' && !isAuthOrKeyError(err)) {
+      await new Promise((r) => setTimeout(r, 200));
+      return await ai.models.generateContent({
+        model: 'gemini-3.1-flash-lite',
+        ...applyFastModelConfig('gemini-3.1-flash-lite', params),
+      });
     }
     throw err;
   }
+}
+
+async function generateStreamWithFallback(
+  ai: GoogleGenAI,
+  requestedModel: string | undefined,
+  params: Omit<Parameters<GoogleGenAI['models']['generateContentStream']>[0], 'model'>
+) {
+  const primaryModel = resolveGeminiModel(requestedModel);
+  try {
+    return await ai.models.generateContentStream({
+      model: primaryModel,
+      ...applyFastModelConfig(primaryModel, params),
+    });
+  } catch (err) {
+    if (primaryModel !== 'gemini-3.1-flash-lite' && !isAuthOrKeyError(err)) {
+      await new Promise((r) => setTimeout(r, 200));
+      return await ai.models.generateContentStream({
+        model: 'gemini-3.1-flash-lite',
+        ...applyFastModelConfig('gemini-3.1-flash-lite', params),
+      });
+    }
+    throw err;
+  }
+}
+
+function buildAssistantRequestPayload(body: AssistantRequestBody) {
+  const rawMessages = Array.isArray(body.messages) ? body.messages : [];
+  const contextSummary =
+    typeof body.contextSummary === 'string' ? body.contextSummary.trim().slice(0, 3500) : '';
+  const language =
+    typeof body.language === 'string' && body.language.trim()
+      ? body.language.trim().slice(0, 40)
+      : 'English';
+  const knowledgeBase =
+    typeof body.knowledgeBase === 'string' ? body.knowledgeBase.trim().slice(0, 3500) : '';
+  const userRole =
+    body.userRole === 'administrator' || body.userRole === 'rescue'
+      ? body.userRole
+      : 'citizen';
+  const emergencyMode = Boolean(body.emergencyMode);
+
+  const normalizedTurns: Array<{ role: 'user' | 'model'; text: string }> = [];
+  for (const m of rawMessages.slice(-10)) {
+    const rawText = typeof m.content === 'string' ? m.content : String(m.text || '');
+    const text = rawText.trim();
+    if (!text) continue;
+    const geminiRole: 'user' | 'model' = m.role === 'user' ? 'user' : 'model';
+    if (normalizedTurns.length === 0 && geminiRole === 'model') continue;
+    const prev = normalizedTurns[normalizedTurns.length - 1];
+    if (prev && prev.role === geminiRole) {
+      prev.text = `${prev.text}\n\n${text}`;
+    } else {
+      normalizedTurns.push({ role: geminiRole, text });
+    }
+  }
+
+  const roleDirective =
+    userRole === 'administrator'
+      ? 'Operator Role: ADMINISTRATOR — reply clearly, directly, and helpfully.'
+      : userRole === 'rescue'
+      ? 'Operator Role: RESCUE TEAM — reply clearly, practically, and fast.'
+      : 'Operator Role: USER — reply in simple, friendly everyday words anyone can understand.';
+
+  const emergencyDirective = emergencyMode
+    ? 'EMERGENCY MODE ACTIVE: Keep emergency answers short and numbered (under 120 words). Tell the user to call local emergency services (112/911) right away if anyone is in danger.'
+    : 'Keep answers clear, direct, and easy to read. Use short paragraphs or bullet steps.';
+
+  const systemParts = [
+    `You are NEXORA AI Helper — a fast, friendly, all-purpose AI assistant inside NEXORA AI.`,
+    `IMPORTANT: Answer ALL kinds of questions the user asks — including general knowledge, math, science, coding, writing, translations, daily help, study questions, weather, health/first-aid, cybersecurity/scam checks, and disaster/emergency guidance. Never refuse a normal question just because it is not about disasters.`,
+    `Write in ${language} unless the user asks you to translate or reply in a different language.`,
+    roleDirective,
+    emergencyDirective,
+    `For live medical emergencies advise dialing 112/911 (note guidance is not a medical diagnosis). Never invent fake official government alerts.`,
+    `Only bring up NEXORA live alerts/incidents/cyber stats when the user asks about them or when relevant to safety.`,
+    NEXORA_TRAINING_PLAYBOOK,
+    knowledgeBase ? `Custom Safety Rules / Training:\n${knowledgeBase}` : '',
+    contextSummary ? `Live Platform Context:\n${contextSummary}` : '',
+  ].filter(Boolean);
+
+  const contents = normalizedTurns.map((t) => ({
+    role: t.role,
+    parts: [{ text: t.text }],
+  }));
+
+  return {
+    normalizedTurns,
+    contents,
+    systemInstruction: systemParts.join('\n\n'),
+  };
 }
 
 async function startServer() {
@@ -125,32 +272,32 @@ async function startServer() {
       const rainContrib = Math.min(50, Math.round(rainfall * 0.72));
       const humContrib = humidity > 75 ? Math.round((humidity - 70) * 0.6) : 5;
       score += rainContrib + humContrib;
-      factors.push(`Rainfall rate ${rainfall} mm/h (+${rainContrib} risk pts)`);
-      factors.push(`Atmospheric saturation ${humidity}% (+${humContrib} risk pts)`);
+      factors.push(`Heavy rain: ${rainfall} mm/h (+${rainContrib} risk points)`);
+      factors.push(`Moisture in air: ${humidity}% (+${humContrib} risk points)`);
     } else if (disasterType === 'Cyclone') {
       const windContrib = Math.min(55, Math.round(wind * 0.35));
       const rainContrib = Math.min(25, Math.round(rainfall * 0.3));
       score += windContrib + rainContrib;
-      factors.push(`Sustained wind speed ${wind} km/h (+${windContrib} risk pts)`);
-      factors.push(`Cyclonic precipitation ${rainfall} mm/h (+${rainContrib} risk pts)`);
+      factors.push(`Strong winds: ${wind} km/h (+${windContrib} risk points)`);
+      factors.push(`Storm rain: ${rainfall} mm/h (+${rainContrib} risk points)`);
     } else if (disasterType === 'Wildfire') {
       const heatContrib = Math.max(0, Math.min(35, Math.round((temperature - 22) * 1.7)));
       const dryContrib = Math.max(0, Math.min(30, Math.round((65 - humidity) * 0.6)));
       const windContrib = Math.min(25, Math.round(wind * 0.28));
       score += heatContrib + dryContrib + windContrib;
-      factors.push(`Ambient temperature ${temperature}°C (+${heatContrib} risk pts)`);
-      factors.push(`Low relative humidity ${humidity}% (+${dryContrib} risk pts)`);
-      factors.push(`Wind spread factor ${wind} km/h (+${windContrib} risk pts)`);
+      factors.push(`Hot weather: ${temperature}°C (+${heatContrib} risk points)`);
+      factors.push(`Dry air: ${humidity}% humidity (+${dryContrib} risk points)`);
+      factors.push(`Wind pushing fire: ${wind} km/h (+${windContrib} risk points)`);
     } else if (disasterType === 'Grid Stress') {
       const thermalContrib = Math.abs(temperature - 22) > 12 ? 28 : 10;
       const windContrib = Math.min(35, Math.round(wind * 0.32));
       score += thermalContrib + windContrib;
-      factors.push(`Thermal load variance at ${temperature}°C (+${thermalContrib} risk pts)`);
-      factors.push(`Line icing/gust exposure ${wind} km/h (+${windContrib} risk pts)`);
+      factors.push(`Temperature strain at ${temperature}°C (+${thermalContrib} risk points)`);
+      factors.push(`Wind on power lines: ${wind} km/h (+${windContrib} risk points)`);
     } else {
       const precipSecondary = Math.min(20, Math.round(rainfall * 0.25));
       score += 32 + precipSecondary;
-      factors.push('Seismic baseline & secondary landslide rain coupling assessed');
+      factors.push('Earthquake shaking and rain-soaked ground landslide check');
     }
 
     const riskScore = Math.min(98, Math.max(8, Math.round(score)));
@@ -161,20 +308,20 @@ async function startServer() {
     const precautions =
       riskLevel === 'High'
         ? [
-            `Alert regional response desks in ${location} for immediate standby.`,
+            `Alert local emergency teams in ${location} to get ready right away.`,
             disasterType === 'Flood'
-              ? 'Avoid low-lying underpasses and shut off main electrical breakers if water rises.'
+              ? 'Stay out of flooded roads and underpasses, and turn off main power if water enters your home.'
               : disasterType === 'Cyclone'
-              ? 'Secure exterior structures, charge backup radios, and follow inland evacuation corridors.'
-              : 'Stage suppression/evacuation assets and protect high-voltage substation corridors.',
+              ? 'Tie down loose outdoor items, charge your phones, and be ready to move to a shelter.'
+              : 'Keep roads clear for fire and power crews and prepare to leave if told to evacuate.',
           ]
         : riskLevel === 'Medium'
         ? [
-            `Maintain 6-hour telemetry monitoring across ${location}.`,
-            'Verify emergency go-kits, potable water reserves, and shelter availability.',
+            `Keep checking weather updates in ${location} over the next 6 hours.`,
+            'Make sure your flashlight, clean drinking water, and nearest shelter address are ready.',
           ]
         : [
-            `Routine baseline telemetry active for ${location}; no immediate evacuation trigger.`,
+            `Conditions look calm in ${location} right now. No emergency move is needed.`,
           ];
 
     res.json({
@@ -183,68 +330,91 @@ async function startServer() {
       riskLevel,
       riskScore,
       confidencePct,
-      modelLabel: 'Demonstration Environmental Risk Model (Multi-Factor Weighted Heuristic)',
+      modelLabel: 'Simple Weather Risk Guide (Sample Model)',
       factors,
-      explanation: `${disasterType} assessment for ${location} computed ${riskLevel} Risk (${riskScore}/100) from supplied meteorological telemetry.`,
+      explanation: `${disasterType} check for ${location}: ${riskLevel} Risk (${riskScore} out of 100) based on the weather numbers entered.`,
       precautions,
     });
   });
 
   app.post('/api/assistant', async (req, res) => {
     try {
-      const body = (req.body || {}) as AssistantRequestBody & { emergencyMode?: boolean };
-      const messages = Array.isArray(body.messages) ? body.messages : [];
-      const contextSummary =
-        typeof body.contextSummary === 'string' ? body.contextSummary : '';
-      const language =
-        typeof body.language === 'string' && body.language.trim()
-          ? body.language.trim()
-          : 'English';
-      const knowledgeBase =
-        typeof body.knowledgeBase === 'string' ? body.knowledgeBase : '';
-      const emergencyMode = Boolean(body.emergencyMode);
+      const body = (req.body || {}) as AssistantRequestBody;
+      const { normalizedTurns, contents, systemInstruction } = buildAssistantRequestPayload(body);
 
-      if (messages.length === 0) {
-        res.status(400).json({ error: 'Please provide a question or command for Nexora AI Assistant.' });
+      if (normalizedTurns.length === 0) {
+        res.status(400).json({ error: 'Please provide a question or message for NEXORA AI Helper.' });
         return;
       }
 
       const ai = getGeminiClient();
-      const conversationTranscript = messages
-        .slice(-10)
-        .map((m) => {
-          const text = typeof m.content === 'string' ? m.content : String((m as { text?: string }).text || '');
-          return `${m.role === 'user' ? 'Operator' : 'Nexora AI'}: ${text}`;
-        })
-        .join('\n\n');
-
-      const promptParts = [
-        contextSummary ? `Live Operational Telemetry Snapshot:\n${contextSummary}` : '',
-        knowledgeBase ? `Verified Knowledge Base:\n${knowledgeBase}` : '',
-        `Conversation:\n${conversationTranscript}`,
-      ].filter(Boolean);
-
-      const emergencyDirective = emergencyMode
-        ? 'EMERGENCY MODE ACTIVE: Respond with ultra-concise numbered life-safety action steps only (under 120 words). Instruct the user to call local emergency services (112/911) for immediate danger.'
-        : 'Keep responses structured and practical (under 220 words unless asked for full detail).';
-
       const response = await generateWithFallback(ai, body.model, {
-        contents: promptParts.join('\n\n'),
-        config: {
-          systemInstruction: `You are Nexora AI Assistant, an emergency preparedness, first-aid, disaster intelligence, and cybersecurity awareness analyst. Respond strictly in ${language}. ${emergencyDirective} Never invent official government emergency alerts, medical diagnoses, or claim live local EMS dispatch availability.`,
-        },
+        contents,
+        config: { systemInstruction },
       });
 
       const reply = response.text?.trim();
       if (!reply) {
-        res.status(502).json({ error: 'Nexora AI Assistant returned an empty response.' });
+        res.status(502).json({ error: 'NEXORA AI Assistant returned an empty response.' });
         return;
       }
 
       res.json({ reply });
     } catch (err: unknown) {
-      const { statusCode, message } = formatGeminiError(err, 'Failed to reach Nexora AI Assistant service.');
+      const { statusCode, message } = formatGeminiError(err, 'Failed to reach NEXORA AI Assistant service.');
       res.status(statusCode).json({ error: message });
+    }
+  });
+
+  app.post('/api/assistant/stream', async (req, res) => {
+    let streamStarted = false;
+    try {
+      const body = (req.body || {}) as AssistantRequestBody;
+      const { normalizedTurns, contents, systemInstruction } = buildAssistantRequestPayload(body);
+
+      if (normalizedTurns.length === 0) {
+        res.status(400).json({ error: 'Please provide a question or message for NEXORA AI Helper.' });
+        return;
+      }
+
+      const ai = getGeminiClient();
+      const stream = await generateStreamWithFallback(ai, body.model, {
+        contents,
+        config: { systemInstruction },
+      });
+
+      res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      res.flushHeaders?.();
+      streamStarted = true;
+
+      let totalChars = 0;
+      for await (const chunk of stream) {
+        const delta = chunk.text ?? '';
+        if (delta) {
+          totalChars += delta.length;
+          res.write(`data: ${JSON.stringify({ delta })}\n\n`);
+        }
+      }
+
+      if (totalChars === 0) {
+        res.write(
+          `data: ${JSON.stringify({ error: 'NEXORA AI Assistant returned an empty response.' })}\n\n`
+        );
+      } else {
+        res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+      }
+      res.end();
+    } catch (err: unknown) {
+      const { statusCode, message } = formatGeminiError(err, 'Failed to reach NEXORA AI Assistant service.');
+      if (!streamStarted) {
+        res.status(statusCode).json({ error: message });
+      } else {
+        res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
+        res.end();
+      }
     }
   });
 
@@ -285,26 +455,26 @@ async function startServer() {
         contents: `Passively analyze this ${kind || 'url'} artifact for cybersecurity risk (do NOT fetch external links):\n\n${payload.slice(0, 4000)}`,
         config: {
           systemInstruction:
-            'You are a cybersecurity threat analyst. Passively evaluate the submitted URL string, email/SMS message, or CSV/network log for phishing, credential harvesting, malicious redirects, or intrusion anomalies.',
+            'You are an online safety helper. Check the submitted website link, SMS/email text, or log for scams, fake login pages, or harmful activity. Write indicators and recommendations in simple, clear everyday English that anyone can understand.',
           responseMimeType: 'application/json',
           responseSchema: {
             type: Type.OBJECT,
             properties: {
               verdict: { type: Type.STRING, description: 'Safe, Suspicious, or Malicious' },
               riskScore: { type: Type.INTEGER, description: 'Score from 0 to 100' },
-              phishingProbability: { type: Type.INTEGER, description: 'Phishing likelihood 0 to 100' },
+              phishingProbability: { type: Type.INTEGER, description: 'Scam likelihood 0 to 100' },
               severity: { type: Type.STRING, description: 'Low, Moderate, High, or Critical' },
               indicators: {
                 type: Type.ARRAY,
                 items: { type: Type.STRING },
-                description: '2 to 4 concise technical or social-engineering indicators',
+                description: '2 to 4 short, plain-English clues explaining why it looks safe or risky',
               },
               suspiciousKeywords: {
                 type: Type.ARRAY,
                 items: { type: Type.STRING },
-                description: 'Suspicious tokens, urgencies, or IOC strings observed',
+                description: 'Suspicious words or warning signs found',
               },
-              recommendation: { type: Type.STRING, description: 'Actionable defensive step' },
+              recommendation: { type: Type.STRING, description: 'Simple, clear advice on what the person should do next' },
             },
           },
         },
@@ -411,7 +581,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Nexora ai server running on http://0.0.0.0:${PORT}`);
+    console.log(`NEXORA AI server running on http://0.0.0.0:${PORT}`);
   });
 }
 

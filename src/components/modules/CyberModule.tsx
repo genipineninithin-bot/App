@@ -148,7 +148,7 @@ export const CyberModule: React.FC<CyberModuleProps> = ({
     <div className="space-y-5">
       {/* Role-Scoped Sub-Navigation */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-1 p-1 bg-[#0A0F1A] border border-slate-800 rounded-lg">
+        <div className="flex flex-wrap items-center gap-1 p-1 bg-slate-900 border border-slate-800 rounded-lg">
           <button
             type="button"
             onClick={() => {
@@ -217,7 +217,7 @@ export const CyberModule: React.FC<CyberModuleProps> = ({
 
       {/* Scanner Tab: Malicious Link, Phishing URL & Suspicious Message */}
       {(activeTab === 'scanner' || activeTab === 'logs') && (
-        <div className="space-y-4 border border-slate-800 rounded-xl bg-[#0A0F1A] p-4">
+        <div className="space-y-4 border border-slate-800 rounded-xl bg-slate-900 p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -284,7 +284,7 @@ export const CyberModule: React.FC<CyberModuleProps> = ({
                     : 'SRC=185.220.101.44 DST=10.4.12.8 PROTO=TCP DPT=2404 FLAGS=SYN IEC104_UNAUTH_FRAME=1'
                 )
               }
-              className="text-xs text-blue-400 hover:text-blue-300 underline"
+              className="min-h-[34px] px-3 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-xs font-semibold text-white transition-colors"
             >
               Try an Example
             </button>
@@ -302,13 +302,13 @@ export const CyberModule: React.FC<CyberModuleProps> = ({
                   ? 'Paste a suspicious text message, WhatsApp, or email here...'
                   : 'Paste firewall or server log text here to check for unusual traffic...'
               }
-              className="w-full p-3 text-xs sm:text-sm rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600"
+              className="w-full p-3 text-xs sm:text-sm rounded-lg border border-slate-700 bg-slate-950 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600"
             />
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-[11px] font-mono text-slate-400">
                 <span>Safe check only — links are never opened on your device</span>
                 {scanKind === 'log' && (
-                  <label className="min-h-[32px] px-2.5 py-1 rounded-md border border-slate-700 bg-[#0D1422] text-slate-200 hover:border-blue-500 cursor-pointer inline-flex items-center gap-1.5">
+                  <label className="min-h-[32px] px-2.5 py-1 rounded-md border border-slate-700 bg-slate-950 text-slate-200 hover:border-blue-500 cursor-pointer inline-flex items-center gap-1.5">
                     <Upload className="w-3 h-3 text-blue-400" aria-hidden="true" />
                     <span>{csvFileName ? csvFileName : 'Upload Log File'}</span>
                     <input
@@ -338,7 +338,7 @@ export const CyberModule: React.FC<CyberModuleProps> = ({
           )}
 
           {scanResult && (
-            <div className="p-4 rounded-xl border border-slate-800 bg-[#0D1422] space-y-3">
+            <div className="p-4 rounded-xl border border-slate-800 bg-slate-950 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2 text-xs">
                   <span className="text-slate-400">Result:</span>
@@ -412,7 +412,7 @@ export const CyberModule: React.FC<CyberModuleProps> = ({
               )}
 
               {scanResult.urlBreakdown && (
-                <div className="p-2.5 rounded-lg border border-slate-800 bg-[#0A0F1A] text-[11px] font-mono text-slate-400 flex flex-wrap gap-3">
+                <div className="p-2.5 rounded-lg border border-slate-800 bg-slate-900 text-[11px] font-mono text-slate-400 flex flex-wrap gap-3">
                   {Object.entries(scanResult.urlBreakdown).map(([k, v]) => {
                     const item = formatUrlBreakdownItem(k, v);
                     return (
@@ -436,7 +436,7 @@ export const CyberModule: React.FC<CyberModuleProps> = ({
           {scanHistory.length > 0 && (
             <div className="pt-2 border-t border-slate-800 space-y-2">
               <div className="text-[11px] font-mono text-slate-400">Recent Session Scans</div>
-              <div className="divide-y divide-slate-800 rounded-lg border border-slate-800 bg-[#0D1422]">
+              <div className="divide-y divide-slate-800 rounded-lg border border-slate-800 bg-slate-950">
                 {scanHistory.map((h) => (
                   <div key={h.id} className="px-3 py-2 flex items-center justify-between gap-2 text-xs">
                     <span className="truncate text-slate-300">
@@ -457,7 +457,7 @@ export const CyberModule: React.FC<CyberModuleProps> = ({
       {/* Admin Active Threat Detections */}
       {isAdmin && activeTab === 'threats' && (
         <div className="space-y-4">
-          <div className="flex flex-wrap items-center gap-1 p-1 bg-[#0A0F1A] border border-slate-800 rounded-lg w-fit">
+          <div className="flex flex-wrap items-center gap-1 p-1 bg-slate-900 border border-slate-800 rounded-lg w-fit">
             {['All', 'OT / SCADA', 'Ransomware', 'Volumetric DDoS', 'Zero-Day', 'Phishing'].map(
               (vec) => (
                 <button
@@ -476,7 +476,7 @@ export const CyberModule: React.FC<CyberModuleProps> = ({
             )}
           </div>
 
-          <div className="divide-y divide-slate-800 border border-slate-800 rounded-xl bg-[#0A0F1A] overflow-hidden">
+          <div className="divide-y divide-slate-800 border border-slate-800 rounded-xl bg-slate-900 overflow-hidden">
             {filteredThreats.length === 0 ? (
               <div className="p-6 text-center space-y-2">
                 <p className="text-xs text-slate-400">No active cyber threats match this filter.</p>
@@ -484,7 +484,7 @@ export const CyberModule: React.FC<CyberModuleProps> = ({
                   <button
                     type="button"
                     onClick={() => setVectorFilter('All')}
-                    className="min-h-[34px] px-3 py-1 text-xs font-medium rounded-lg border border-slate-700 bg-[#0D1422] text-slate-200 hover:bg-slate-800"
+                    className="min-h-[34px] px-3 py-1 text-xs font-medium rounded-lg border border-slate-700 bg-slate-950 text-slate-200 hover:bg-slate-800"
                   >
                     Show All Threats
                   </button>
@@ -570,7 +570,7 @@ export const CyberModule: React.FC<CyberModuleProps> = ({
       {/* Admin Security Incident History & Cyber Analytics */}
       {isAdmin && activeTab === 'history' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-          <div className="lg:col-span-5 border border-slate-800 rounded-xl bg-[#0A0F1A] p-4 space-y-3">
+          <div className="lg:col-span-5 border border-slate-800 rounded-xl bg-slate-900 p-4 space-y-3">
             <div className="flex items-center gap-2 text-xs font-semibold text-slate-100">
               <Activity className="w-4 h-4 text-blue-400" aria-hidden="true" />
               <span>Safety Summary</span>
@@ -602,7 +602,7 @@ export const CyberModule: React.FC<CyberModuleProps> = ({
             </div>
           </div>
 
-          <div className="lg:col-span-7 border border-slate-800 rounded-xl bg-[#0A0F1A] overflow-hidden">
+          <div className="lg:col-span-7 border border-slate-800 rounded-xl bg-slate-900 overflow-hidden">
             <div className="px-4 py-3 border-b border-slate-800 text-xs font-semibold text-slate-100">
               Resolved &amp; Blocked Cyber Warnings
             </div>

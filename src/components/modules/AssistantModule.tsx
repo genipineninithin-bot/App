@@ -556,7 +556,7 @@ export const AssistantModule: React.FC<AssistantModuleProps> = ({
     <div className="space-y-4">
       {/* Top Toolbar: Tabs + Multilingual Selector */}
       <div className="flex flex-wrap items-center justify-between gap-2.5">
-        <div className="flex items-center gap-1 p-1 bg-[#0A0F1A] border border-slate-800 rounded-lg">
+        <div className="flex items-center gap-1 p-1 bg-slate-900 border border-slate-800 rounded-lg">
           <button
             type="button"
             onClick={() => setTab('chat')}
@@ -602,7 +602,7 @@ export const AssistantModule: React.FC<AssistantModuleProps> = ({
             className={`min-h-[38px] px-3 py-1 text-xs font-medium rounded-lg border transition-colors inline-flex items-center gap-1.5 ${
               fastMode
                 ? 'border-sky-500/70 bg-sky-600/20 text-sky-200'
-                : 'border-slate-700 bg-[#0A0F1A] text-slate-300 hover:border-sky-500/50'
+                : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-sky-500/50'
             }`}
           >
             <Sparkles className="w-3.5 h-3.5 text-sky-400" aria-hidden="true" />
@@ -616,7 +616,7 @@ export const AssistantModule: React.FC<AssistantModuleProps> = ({
             className={`min-h-[38px] px-3 py-1 text-xs font-medium rounded-lg border transition-colors inline-flex items-center gap-1.5 ${
               emergencyMode
                 ? 'border-red-500 bg-red-600/25 text-red-200'
-                : 'border-slate-700 bg-[#0A0F1A] text-slate-300 hover:border-red-500/50'
+                : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-red-500/50'
             }`}
           >
             <AlertTriangle className="w-3.5 h-3.5 text-red-400" aria-hidden="true" />
@@ -630,7 +630,7 @@ export const AssistantModule: React.FC<AssistantModuleProps> = ({
               value={language}
               onChange={(e) => setLanguage(e.target.value)}
               aria-label="Response language"
-              className="min-h-[38px] px-2.5 text-xs rounded-lg border border-slate-700 bg-[#0A0F1A] text-slate-100"
+              className="min-h-[38px] px-2.5 text-xs rounded-lg border border-slate-700 bg-slate-900 text-slate-100"
             >
               {LANGUAGES.map((lang) => (
                 <option key={lang} value={lang}>
@@ -644,7 +644,7 @@ export const AssistantModule: React.FC<AssistantModuleProps> = ({
 
       {tab === 'chat' && (
         <div
-          className={`flex flex-col h-[60vh] min-h-[390px] sm:h-[520px] border rounded-xl bg-[#0A0F1A] overflow-hidden ${
+          className={`flex flex-col h-[60vh] min-h-[390px] sm:h-[520px] border rounded-xl bg-slate-900 overflow-hidden ${
             emergencyMode ? 'border-red-500/60' : 'border-slate-800'
           }`}
         >
@@ -775,7 +775,7 @@ export const AssistantModule: React.FC<AssistantModuleProps> = ({
 
           <form
             onSubmit={handleSubmit}
-            className="p-3 border-t border-slate-800 bg-[#080C15] flex items-end gap-2"
+            className="p-3 border-t border-slate-800 bg-slate-950 flex items-end gap-2"
           >
             <textarea
               rows={1}
@@ -784,7 +784,7 @@ export const AssistantModule: React.FC<AssistantModuleProps> = ({
               onKeyDown={handleComposerKeyDown}
               placeholder={`Ask anything in ${language} — general help, safety, coding, math, writing (Enter to send)...`}
               aria-label="Prompt NEXORA AI Assistant"
-              className="flex-1 min-h-[44px] max-h-32 px-3.5 py-2.5 text-sm rounded-lg border border-slate-800 bg-[#0D1422] text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600 resize-y"
+              className="flex-1 min-h-[44px] max-h-32 px-3.5 py-2.5 text-sm rounded-lg border border-slate-800 bg-slate-950 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600 resize-y"
             />
             {isLoading ? (
               <button
@@ -812,7 +812,7 @@ export const AssistantModule: React.FC<AssistantModuleProps> = ({
       )}
 
       {tab === 'checklists' && (
-        <div className="border border-slate-800 rounded-xl bg-[#0A0F1A] divide-y divide-slate-800 overflow-hidden">
+        <div className="border border-slate-800 rounded-xl bg-slate-900 divide-y divide-slate-800 overflow-hidden">
           <div className="px-4 py-3 flex items-center justify-between text-xs">
             <span className="font-semibold text-slate-100">Emergency Safety Checklists</span>
             <span className="font-mono text-blue-400">
@@ -853,7 +853,7 @@ export const AssistantModule: React.FC<AssistantModuleProps> = ({
         <div className="space-y-4">
           <form
             onSubmit={handleAddKnowledge}
-            className="p-4 rounded-xl border border-slate-800 bg-[#0A0F1A] space-y-3"
+            className="p-4 rounded-xl border border-slate-800 bg-slate-900 space-y-3"
           >
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
@@ -894,12 +894,12 @@ export const AssistantModule: React.FC<AssistantModuleProps> = ({
                 value={kbTopic}
                 onChange={(e) => setKbTopic(e.target.value)}
                 placeholder="SOP or Knowledge Topic"
-                className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100"
+                className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-100"
               />
               <select
                 value={kbCategory}
                 onChange={(e) => setKbCategory(e.target.value as AiKnowledgeEntry['category'])}
-                className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-200"
+                className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-200"
               >
                 <option value="Disaster">Disaster</option>
                 <option value="First Aid">First Aid</option>
@@ -909,7 +909,7 @@ export const AssistantModule: React.FC<AssistantModuleProps> = ({
               <select
                 value={kbLang}
                 onChange={(e) => setKbLang(e.target.value)}
-                className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-200"
+                className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-200"
               >
                 {LANGUAGES.map((l) => (
                   <option key={l} value={l}>
@@ -926,7 +926,7 @@ export const AssistantModule: React.FC<AssistantModuleProps> = ({
               value={kbGuidance}
               onChange={(e) => setKbGuidance(e.target.value)}
               placeholder="Enter verified SOP, evacuation threshold, medical protocol, or cyber rule to train NEXORA AI..."
-              className="w-full p-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100"
+              className="w-full p-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-100"
             />
             <div className="flex flex-wrap items-center justify-between gap-2">
               {kbSavedNotice ? (
@@ -953,11 +953,11 @@ export const AssistantModule: React.FC<AssistantModuleProps> = ({
               onChange={(e) => setKbSearch(e.target.value)}
               placeholder="Filter trained SOPs by keyword, category, or language..."
               aria-label="Filter AI training knowledge base"
-              className="w-full min-h-[38px] px-3 text-xs rounded-lg border border-slate-800 bg-[#0A0F1A] text-slate-100 placeholder:text-slate-500"
+              className="w-full min-h-[38px] px-3 text-xs rounded-lg border border-slate-800 bg-slate-900 text-slate-100 placeholder:text-slate-500"
             />
           </div>
 
-          <div className="divide-y divide-slate-800 border border-slate-800 rounded-xl bg-[#0A0F1A] overflow-hidden">
+          <div className="divide-y divide-slate-800 border border-slate-800 rounded-xl bg-slate-900 overflow-hidden">
             {combinedKnowledge.map((k) => {
               const isLocal = localTrainingEntries.some((item) => item.id === k.id);
               return (

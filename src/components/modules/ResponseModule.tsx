@@ -3,7 +3,6 @@ import {
   AlertOctagon,
   Camera,
   CheckCircle2,
-  Globe,
   MapPin,
   Monitor,
   Plus,
@@ -21,12 +20,19 @@ import {
   Severity,
   UserRole,
 } from '../../types/modules';
-import { TacticalGlobe3D } from '../TacticalGlobe3D';
+import { GoogleMapsPanel } from '../GoogleMapsPanel';
 import {
   plainIncidentDomain,
   plainIncidentStatus,
   plainSeverity,
 } from '../../utils/plainLabels';
+import {
+  EMERGENCY_DEPARTMENTS,
+  getIncidentApprovalState,
+  PENDING_ADMIN_UNIT_LABEL,
+  suggestDepartmentForIncident,
+} from '../../../frontend/departments';
+import { requestBestGeolocation } from '../../../frontend/permissions';
 
 interface ResponseModuleProps {
   incidents: IncidentTicket[];
@@ -34,6 +40,7 @@ interface ResponseModuleProps {
   alerts?: AlertNotification[];
   resources?: ReliefResource[];
   userRole?: UserRole;
+  liveLocation?: { lat: number; lng: number } | null;
   onAdvanceStatus: (id: string, nextStatus: IncidentTicket['status']) => void;
   onCreateIncident: (ticket: IncidentTicket) => void;
   onOpenModule?: (id: ModuleId) => void;
@@ -78,6 +85,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
   alerts = [],
   resources = [],
   userRole = 'citizen',
+  liveLocation = null,
   onAdvanceStatus,
   onCreateIncident,
   onOpenModule,
@@ -92,7 +100,9 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
   const [show3DMap, setShow3DMap] = useState(false);
   const [title, setTitle] = useState('');
   const [region, setRegion] = useState('');
-  const [locationCoords, setLocationCoords] = useState('');
+  const [locationCoords, setLocationCoords] = useState(() =>
+    liveLocation ? `${liveLocation.lat.toFixed(4)}°, ${liveLocation.lng.toFixed(4)}°` : ''
+  );
   const [gpsNotice, setGpsNotice] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
   const [domain, setDomain] = useState<IncidentTicket['domain']>('Disaster');
@@ -128,29 +138,22 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
   >({});
 
   const summary = useMemo(() => {
-    const rejected = incidents.filter((i) => i.notes.startsWith('[REJECTED]')).length;
-    const verified = incidents.filter((i) => Boolean(i.verifiedByAdmin)).length;
+    const rejected = incidents.filter((i) => getIncidentApprovalState(i) === 'rejected').length;
+    const verified = incidents.filter((i) => getIncidentApprovalState(i) === 'approved').length;
+    const awaitingApproval = incidents.filter((i) => getIncidentApprovalState(i) === 'pending').length;
     const resolved = incidents.filter((i) => i.status === 'Resolved' && !i.notes.startsWith('[REJECTED]')).length;
-    const pending = incidents.filter((i) => i.status !== 'Resolved').length;
-    return { total: incidents.length, pending, verified, rejected, resolved };
+    return { total: incidents.length, awaitingApproval, verified, rejected, resolved };
   }, [incidents]);
 
-  const handleLocateMe = () => {
-    setGpsNotice(null);
-    if (!navigator.geolocation) {
-      setGpsNotice('Location access is not supported here. Please type your city or street address.');
-      return;
+  const handleLocateMe = async () => {
+    setGpsNotice('Acquiring live GPS fix...');
+    const outcome = await requestBestGeolocation();
+    if (outcome.ok) {
+      setGpsNotice(null);
+      setLocationCoords(`${outcome.lat.toFixed(4)}°, ${outcome.lng.toFixed(4)}°`);
+    } else {
+      setGpsNotice(outcome.message);
     }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setGpsNotice(null);
-        setLocationCoords(`${pos.coords.latitude.toFixed(4)}°, ${pos.coords.longitude.toFixed(4)}°`);
-      },
-      () => {
-        setGpsNotice('Could not read your GPS location. Please type your city or street address above.');
-      },
-      { timeout: 4000 }
-    );
   };
 
   const handleImagePick = (
@@ -213,22 +216,25 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
       severity,
       region: region.trim(),
       assignedUnit: isAdmin
-        ? 'Rapid Response Command'
+        ? 'Disaster Management Force (NDRF/FEMA)'
         : isRescue
-        ? 'Field Rescue Alpha'
-        : 'Citizen SOS Triage Desk',
+        ? 'Fire & Rescue Department'
+        : PENDING_ADMIN_UNIT_LABEL,
+      verifiedByAdmin: isAdmin ? true : false,
       platformSupport,
       status: 'Dispatched',
       updatedAt: 'Just now',
-      locationCoords: locationCoords.trim() || undefined,
+      locationCoords:
+        locationCoords.trim() ||
+        (liveLocation ? `${liveLocation.lat.toFixed(4)}°, ${liveLocation.lng.toFixed(4)}°` : undefined),
       imageSummary: imageFileName ? `Uploaded imagery: ${imageFileName}` : undefined,
       notes:
         notes.trim() ||
         (isAdmin
-          ? 'Operator-initiated emergency ticket synced to Windows & Mobile responder consoles.'
+          ? 'Admin-approved emergency dispatch synced across command units.'
           : isRescue
-          ? 'Field rescue team dispatch report synced across active command units.'
-          : 'Citizen field report logged for regional emergency verification.'),
+          ? 'Field rescue team dispatch report awaiting command coordination.'
+          : 'Citizen Emergency SOS submitted — awaiting administrator approval and department assignment.'),
     });
     setTitle('');
     setRegion('');
@@ -331,40 +337,40 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
             className={`min-h-[40px] px-3.5 py-2 text-xs font-medium rounded-lg border transition-colors inline-flex items-center gap-1.5 whitespace-nowrap ${
               show3DMap
                 ? 'border-blue-500 bg-blue-600/20 text-blue-200'
-                : 'border-slate-700 bg-[#0A0F1A] text-slate-100 hover:bg-slate-800'
+                : 'border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800'
             }`}
           >
-            <Globe className="w-4 h-4 text-blue-400" aria-hidden="true" />
-            <span>{show3DMap ? 'Hide 3D Map' : 'Open 3D Map'}</span>
+            <MapPin className="w-4 h-4 text-emerald-400" aria-hidden="true" />
+            <span>{show3DMap ? 'Hide Google Maps' : 'Open Google Maps'}</span>
           </button>
 
           <button
             type="button"
             onClick={() => setShowForm((v) => !v)}
-            className="min-h-[40px] px-3.5 py-2 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center gap-1.5 whitespace-nowrap"
+            className="min-h-[40px] px-4 py-2 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors flex items-center gap-1.5 whitespace-nowrap shadow-sm"
           >
             <Plus className="w-4 h-4" aria-hidden="true" />
-            <span>{showForm ? 'Close Form' : isAdmin ? 'Send Rescue Team' : 'Report an Emergency'}</span>
+            <span>{showForm ? 'Close SOS Form' : 'Emergency SOS — Add Report'}</span>
           </button>
         </div>
       </div>
 
       {/* Incident Status KPI Strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 border border-slate-800 rounded-xl bg-[#0A0F1A] divide-y sm:divide-y-0 sm:divide-x divide-slate-800">
+      <div className="grid grid-cols-2 sm:grid-cols-5 border border-slate-800 rounded-xl bg-slate-900 divide-y sm:divide-y-0 sm:divide-x divide-slate-800">
         <div className="p-3">
           <div className="text-[11px] text-slate-400">All Reports</div>
           <div className="font-display text-lg font-bold tabular-nums text-slate-100">{summary.total}</div>
         </div>
         <div className="p-3">
-          <div className="text-[11px] text-slate-400">Help Needed Now</div>
-          <div className="font-display text-lg font-bold tabular-nums text-amber-400">{summary.pending}</div>
+          <div className="text-[11px] text-slate-400">Pending Admin Approval</div>
+          <div className="font-display text-lg font-bold tabular-nums text-amber-400">{summary.awaitingApproval}</div>
         </div>
         <div className="p-3">
-          <div className="text-[11px] text-slate-400">Verified Safe/Real</div>
+          <div className="text-[11px] text-slate-400">Approved &amp; Assigned</div>
           <div className="font-display text-lg font-bold tabular-nums text-emerald-400">{summary.verified}</div>
         </div>
         <div className="p-3">
-          <div className="text-[11px] text-slate-400">Closed / Rejected</div>
+          <div className="text-[11px] text-slate-400">Rejected</div>
           <div className="font-display text-lg font-bold tabular-nums text-red-400">{summary.rejected}</div>
         </div>
         <div className="p-3">
@@ -373,13 +379,14 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
         </div>
       </div>
 
-      {/* Optional Interactive 3D Incident Theater */}
+      {/* Optional Interactive Google Maps Incident View */}
       {show3DMap && (
-        <TacticalGlobe3D
+        <GoogleMapsPanel
           forecasts={forecasts}
           incidents={incidents}
           alerts={alerts}
           resources={resources}
+          initialUserLocation={liveLocation}
           onSelectModule={onOpenModule}
         />
       )}
@@ -388,7 +395,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
       {showForm && (
         <form
           onSubmit={handleSubmit}
-          className="p-4 rounded-xl border border-slate-800 bg-[#0A0F1A] space-y-3"
+          className="p-4 rounded-xl border border-slate-800 bg-slate-900 space-y-3"
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input
@@ -398,7 +405,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
               placeholder="What happened? (e.g., Flooded street, fallen tree)"
               required
               minLength={3}
-              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100"
+              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-100"
             />
             <input
               type="text"
@@ -407,7 +414,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
               placeholder="City, town, or neighborhood"
               required
               minLength={2}
-              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100"
+              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-100"
             />
           </div>
 
@@ -418,7 +425,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
                 value={locationCoords}
                 onChange={(e) => setLocationCoords(e.target.value)}
                 placeholder="GPS location (optional)"
-                className="flex-1 min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100"
+                className="flex-1 min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-100"
               />
               <button
                 type="button"
@@ -434,7 +441,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
             <select
               value={domain}
               onChange={(e) => setDomain(e.target.value as IncidentTicket['domain'])}
-              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-200"
+              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-200"
             >
               <option value="Disaster">Disaster / Weather</option>
               <option value="Hybrid Nexus">Disaster &amp; Power Outage</option>
@@ -444,7 +451,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
             <select
               value={severity}
               onChange={(e) => setSeverity(e.target.value as Severity)}
-              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-200"
+              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-200"
             >
               <option value="Critical">Danger Now (Urgent)</option>
               <option value="High">High Risk</option>
@@ -463,14 +470,14 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
               onChange={(e) =>
                 setPlatformSupport(e.target.value as IncidentTicket['platformSupport'])
               }
-              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-200"
+              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-200"
             >
               <option value="Windows & Mobile">All Teams (Office &amp; Field)</option>
               <option value="Windows Desktop">Command Desk</option>
               <option value="Mobile Field">Mobile Rescue Team</option>
             </select>
 
-            <label className="min-h-[40px] px-3 rounded-lg border border-slate-700 bg-[#0D1422] text-xs text-slate-300 flex items-center justify-between cursor-pointer hover:border-blue-500">
+            <label className="min-h-[40px] px-3 rounded-lg border border-slate-700 bg-slate-950 text-xs text-slate-300 flex items-center justify-between cursor-pointer hover:border-blue-500">
               <span className="inline-flex items-center gap-1.5 truncate">
                 <Camera className="w-3.5 h-3.5 text-blue-400 shrink-0" aria-hidden="true" />
                 <span className="truncate">
@@ -491,22 +498,27 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Tell us who needs help, blocked roads, or damage nearby..."
-            className="w-full p-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100"
+            className="w-full p-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-100"
           />
 
-          <div className="flex justify-end">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[11px] text-slate-400">
+              {isAdmin
+                ? 'Admin submissions are automatically approved and ready for department assignment.'
+                : 'Your Emergency SOS will be sent to the Administrator for approval and department assignment.'}
+            </span>
             <button
               type="submit"
-              className="min-h-[40px] px-4 py-2 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+              className="min-h-[40px] px-4 py-2 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
             >
-              Send Emergency Report
+              Send Emergency SOS
             </button>
           </div>
         </form>
       )}
 
       {/* Incident Queue & Role-Scoped Operational Drawer */}
-      <div className="divide-y divide-slate-800 border border-slate-800 rounded-xl bg-[#0A0F1A] overflow-hidden">
+      <div className="divide-y divide-slate-800 border border-slate-800 rounded-xl bg-slate-900 overflow-hidden">
         {incidents.length === 0 ? (
           <div className="p-6 text-center text-xs text-slate-400">
             No emergency reports right now. Use &ldquo;Report an Emergency&rdquo; above if someone needs help.
@@ -537,15 +549,30 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
                     </span>
                     <span aria-hidden="true">·</span>
                     <span className="text-blue-400">{plainIncidentStatus(inc.status)}</span>
-                    {inc.verifiedByAdmin && (
-                      <>
-                        <span aria-hidden="true">·</span>
-                        <span className="text-emerald-400 inline-flex items-center gap-1">
-                          <CheckCircle2 className="w-3 h-3" aria-hidden="true" />
-                          Verified
+                    {(() => {
+                      const approval = getIncidentApprovalState(inc);
+                      if (approval === 'approved') {
+                        return (
+                          <span className="px-2 py-0.5 rounded border border-emerald-500/40 bg-emerald-500/15 text-emerald-300 text-[10px] font-semibold inline-flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3" aria-hidden="true" />
+                            <span>Admin Approved</span>
+                          </span>
+                        );
+                      }
+                      if (approval === 'rejected') {
+                        return (
+                          <span className="px-2 py-0.5 rounded border border-red-500/40 bg-red-500/15 text-red-300 text-[10px] font-semibold inline-flex items-center gap-1">
+                            <XCircle className="w-3 h-3" aria-hidden="true" />
+                            <span>Rejected</span>
+                          </span>
+                        );
+                      }
+                      return (
+                        <span className="px-2 py-0.5 rounded border border-amber-500/40 bg-amber-500/15 text-amber-300 text-[10px] font-semibold">
+                          Pending Admin Approval
                         </span>
-                      </>
-                    )}
+                      );
+                    })()}
                     {inc.triagePriority && (
                       <>
                         <span aria-hidden="true">·</span>
@@ -566,7 +593,9 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
                       </>
                     )}
                     <span aria-hidden="true">·</span>
-                    <span>Team: {inc.assignedUnit}</span>
+                    <span className={inc.verifiedByAdmin ? 'text-emerald-300' : 'text-amber-300'}>
+                      Department: {inc.assignedUnit}
+                    </span>
                     <span aria-hidden="true">·</span>
                     <span>Updated {inc.updatedAt}</span>
                   </div>
@@ -594,9 +623,93 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
                 </div>
               </div>
 
+              {/* Inline Admin Approval & Department Assignment Bar (Always visible to Admin on pending/open tickets) */}
+              {isAdmin && onUpdateAdminIncident && getIncidentApprovalState(inc) !== 'rejected' && (
+                <div
+                  className={`p-3 rounded-lg border flex flex-wrap items-center justify-between gap-2.5 text-xs ${
+                    inc.verifiedByAdmin
+                      ? 'border-slate-800 bg-slate-950'
+                      : 'border-amber-500/40 bg-amber-950/20'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <ShieldCheck
+                      className={`w-4 h-4 shrink-0 ${
+                        inc.verifiedByAdmin ? 'text-emerald-400' : 'text-amber-400'
+                      }`}
+                      aria-hidden="true"
+                    />
+                    <span className="font-medium text-slate-200">
+                      {inc.verifiedByAdmin
+                        ? 'Reassign Response Department:'
+                        : 'Admin Approval Required — Assign Department:'}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      aria-label="Select response department"
+                      value={
+                        assignInput[inc.id] ??
+                        (EMERGENCY_DEPARTMENTS.includes(inc.assignedUnit as (typeof EMERGENCY_DEPARTMENTS)[number])
+                          ? inc.assignedUnit
+                          : suggestDepartmentForIncident(inc))
+                      }
+                      onChange={(e) =>
+                        setAssignInput((p) => ({ ...p, [inc.id]: e.target.value }))
+                      }
+                      className="min-h-[34px] px-2.5 rounded-lg border border-slate-700 bg-slate-900 text-xs text-slate-100"
+                    >
+                      {EMERGENCY_DEPARTMENTS.map((dept) => (
+                        <option key={dept} value={dept}>
+                          {dept}
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const chosenDept =
+                          assignInput[inc.id] ||
+                          (EMERGENCY_DEPARTMENTS.includes(inc.assignedUnit as (typeof EMERGENCY_DEPARTMENTS)[number])
+                            ? inc.assignedUnit
+                            : suggestDepartmentForIncident(inc));
+                        void onUpdateAdminIncident(inc.id, {
+                          verifiedByAdmin: true,
+                          assignedUnit: chosenDept,
+                          status: inc.status === 'Resolved' ? 'Dispatched' : inc.status,
+                        });
+                      }}
+                      className="min-h-[34px] px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold inline-flex items-center gap-1.5 transition-colors"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />
+                      <span>{inc.verifiedByAdmin ? 'Update Department' : 'Approve & Assign'}</span>
+                    </button>
+
+                    {!inc.verifiedByAdmin && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void onUpdateAdminIncident(inc.id, {
+                            verifiedByAdmin: false,
+                            status: 'Resolved',
+                            notes: `[REJECTED] Flagged by admin review: ${inc.notes}`.slice(0, 480),
+                          })
+                        }
+                        className="min-h-[34px] px-3 py-1 rounded-lg border border-red-500/40 bg-red-600/20 hover:bg-red-600/30 text-red-300 text-xs font-medium inline-flex items-center gap-1 transition-colors"
+                      >
+                        <XCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                        <span>Reject</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Admin & Rescue Command Panel */}
               {expanded && (isAdmin || isRescue) && (
-                <div className="p-3.5 rounded-xl border border-slate-800 bg-[#0D1422] space-y-3 text-xs">
+                <div className="p-3.5 rounded-xl border border-slate-800 bg-slate-950 space-y-3 text-xs">
                   {/* Verification & Rejection + AI Actions */}
                   <div className="flex flex-wrap items-center gap-2">
                     {isAdmin && onUpdateAdminIncident && !inc.verifiedByAdmin && (
@@ -677,7 +790,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
 
                   {/* Pre vs Post Satellite Side-by-Side Comparator (Admin) */}
                   {isAdmin && (preImages[inc.id] || uploadedImages[inc.id]) && (
-                    <div className="p-3 rounded-lg border border-slate-800 bg-[#0A0F1A] space-y-2.5">
+                    <div className="p-3 rounded-lg border border-slate-800 bg-slate-900 space-y-2.5">
                       <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
                         <span className="font-semibold text-slate-200">
                           Satellite / Field Imagery Comparison (Visual Inspection Assist — Does NOT confirm casualties)
@@ -689,7 +802,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
                               setDamageCategoryInput((p) => ({ ...p, [inc.id]: e.target.value }))
                             }
                             aria-label="Estimated structural damage category"
-                            className="min-h-[30px] px-2 rounded border border-slate-700 bg-[#0D1422] text-slate-200"
+                            className="min-h-[30px] px-2 rounded border border-slate-700 bg-slate-950 text-slate-200"
                           >
                             <option value="Unknown / Needs inspection">Unknown / Needs inspection</option>
                             <option value="Minor">Minor Damage</option>
@@ -703,12 +816,12 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
                               setAreaKm2Input((p) => ({ ...p, [inc.id]: e.target.value }))
                             }
                             placeholder="Area km²"
-                            className="w-24 min-h-[30px] px-2 rounded border border-slate-700 bg-[#0D1422] text-slate-100"
+                            className="w-24 min-h-[30px] px-2 rounded border border-slate-700 bg-slate-950 text-slate-100"
                           />
                         </div>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="rounded-lg border border-slate-800 bg-[#060911] p-2">
+                        <div className="rounded-lg border border-slate-800 bg-slate-950 p-2">
                           <div className="text-[10px] font-mono text-slate-400 mb-1">PRE-DISASTER BASELINE</div>
                           {preImages[inc.id] ? (
                             <img
@@ -722,7 +835,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
                             </div>
                           )}
                         </div>
-                        <div className="rounded-lg border border-slate-800 bg-[#060911] p-2">
+                        <div className="rounded-lg border border-slate-800 bg-slate-950 p-2">
                           <div className="text-[10px] font-mono text-sky-400 mb-1">POST-DISASTER CAPTURE</div>
                           {uploadedImages[inc.id] ? (
                             <img
@@ -741,7 +854,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
                   )}
 
                   {inc.damageAssessment && (
-                    <div className="p-2.5 rounded-lg border border-slate-800 bg-[#0A0F1A] text-slate-300">
+                    <div className="p-2.5 rounded-lg border border-slate-800 bg-slate-900 text-slate-300">
                       <span className="text-slate-400 font-mono mr-2">Damage Assessment:</span>
                       {inc.damageAssessment}
                     </div>
@@ -764,7 +877,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
                             setAssignInput((p) => ({ ...p, [inc.id]: e.target.value }))
                           }
                           placeholder="Assign rescue unit"
-                          className="min-h-[38px] px-2.5 rounded-lg border border-slate-700 bg-[#0A0F1A] text-slate-100"
+                          className="min-h-[38px] px-2.5 rounded-lg border border-slate-700 bg-slate-900 text-slate-100"
                         />
                         <input
                           type="number"
@@ -774,7 +887,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
                             setExposedInput((p) => ({ ...p, [inc.id]: e.target.value }))
                           }
                           placeholder="Exposed population"
-                          className="min-h-[38px] px-2.5 rounded-lg border border-slate-700 bg-[#0A0F1A] text-slate-100"
+                          className="min-h-[38px] px-2.5 rounded-lg border border-slate-700 bg-slate-900 text-slate-100"
                         />
                         <input
                           type="number"
@@ -784,7 +897,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
                             setCasualtyInput((p) => ({ ...p, [inc.id]: e.target.value }))
                           }
                           placeholder="Casualties logged"
-                          className="min-h-[38px] px-2.5 rounded-lg border border-slate-700 bg-[#0A0F1A] text-slate-100"
+                          className="min-h-[38px] px-2.5 rounded-lg border border-slate-700 bg-slate-900 text-slate-100"
                         />
                         <button
                           type="button"
@@ -823,7 +936,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
                             setMissingInput((p) => ({ ...p, [inc.id]: e.target.value }))
                           }
                           placeholder="Missing persons"
-                          className="min-h-[34px] px-2.5 rounded-lg border border-slate-800 bg-[#0A0F1A] text-slate-200"
+                          className="min-h-[34px] px-2.5 rounded-lg border border-slate-800 bg-slate-900 text-slate-200"
                         />
                         <input
                           type="number"
@@ -833,7 +946,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
                             setInjuredInput((p) => ({ ...p, [inc.id]: e.target.value }))
                           }
                           placeholder="Injured count"
-                          className="min-h-[34px] px-2.5 rounded-lg border border-slate-800 bg-[#0A0F1A] text-slate-200"
+                          className="min-h-[34px] px-2.5 rounded-lg border border-slate-800 bg-slate-900 text-slate-200"
                         />
                         <input
                           type="number"
@@ -843,14 +956,14 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
                             setTrappedInput((p) => ({ ...p, [inc.id]: e.target.value }))
                           }
                           placeholder="Trapped count"
-                          className="min-h-[34px] px-2.5 rounded-lg border border-slate-800 bg-[#0A0F1A] text-slate-200"
+                          className="min-h-[34px] px-2.5 rounded-lg border border-slate-800 bg-slate-900 text-slate-200"
                         />
                       </div>
                     </div>
                   )}
 
                   {/* Structured Patient Assessment & AI Triage Support (Decision Support Only) */}
-                  <div className="p-3 rounded-lg border border-amber-500/25 bg-[#0A0F1A] space-y-2.5">
+                  <div className="p-3 rounded-lg border border-amber-500/25 bg-slate-900 space-y-2.5">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="font-semibold text-amber-300 inline-flex items-center gap-1.5">
                         <AlertOctagon className="w-3.5 h-3.5" aria-hidden="true" />
@@ -885,7 +998,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
                           }))
                         }
                         aria-label="Patient consciousness"
-                        className="min-h-[34px] px-2 rounded border border-slate-700 bg-[#0D1422] text-slate-200"
+                        className="min-h-[34px] px-2 rounded border border-slate-700 bg-slate-950 text-slate-200"
                       >
                         <option value="Conscious">Conscious / Alert</option>
                         <option value="Unconscious">Unconscious / Unresponsive</option>
@@ -904,7 +1017,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
                           }))
                         }
                         aria-label="Patient breathing status"
-                        className="min-h-[34px] px-2 rounded border border-slate-700 bg-[#0D1422] text-slate-200"
+                        className="min-h-[34px] px-2 rounded border border-slate-700 bg-slate-950 text-slate-200"
                       >
                         <option value="Normal">Breathing: Normal</option>
                         <option value="Labored">Breathing: Labored</option>
@@ -924,7 +1037,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
                           }))
                         }
                         aria-label="Patient bleeding status"
-                        className="min-h-[34px] px-2 rounded border border-slate-700 bg-[#0D1422] text-slate-200"
+                        className="min-h-[34px] px-2 rounded border border-slate-700 bg-slate-950 text-slate-200"
                       >
                         <option value="None">Bleeding: None</option>
                         <option value="Moderate">Bleeding: Moderate</option>
@@ -945,7 +1058,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
                           }))
                         }
                         placeholder="Observed trauma / symptoms..."
-                        className="min-h-[34px] px-2.5 rounded border border-slate-700 bg-[#0D1422] text-slate-100"
+                        className="min-h-[34px] px-2.5 rounded border border-slate-700 bg-slate-950 text-slate-100"
                       />
                     </div>
                   </div>
@@ -976,7 +1089,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
                               className={`min-h-[28px] px-2.5 py-0.5 rounded text-[11px] font-medium transition-colors disabled:opacity-50 ${
                                 active
                                   ? 'bg-emerald-600 text-white'
-                                  : 'bg-[#0A0F1A] border border-slate-700 text-slate-400 hover:text-slate-100'
+                                  : 'bg-slate-900 border border-slate-700 text-slate-400 hover:text-slate-100'
                               }`}
                             >
                               {step}
@@ -995,7 +1108,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
                             })
                           }
                           aria-label="Patient triage priority"
-                          className="min-h-[38px] px-2.5 rounded-lg border border-slate-700 bg-[#0A0F1A] text-slate-200 disabled:opacity-50"
+                          className="min-h-[38px] px-2.5 rounded-lg border border-slate-700 bg-slate-900 text-slate-200 disabled:opacity-50"
                         >
                           <option value="Red - Immediate">Red - Immediate</option>
                           <option value="Yellow - Delayed">Yellow - Delayed</option>
@@ -1009,7 +1122,7 @@ export const ResponseModule: React.FC<ResponseModuleProps> = ({
                             setTransferInput((p) => ({ ...p, [inc.id]: e.target.value }))
                           }
                           placeholder="Patient transfer / hospital destination note"
-                          className="min-h-[38px] px-2.5 rounded-lg border border-slate-700 bg-[#0A0F1A] text-slate-100 disabled:opacity-50"
+                          className="min-h-[38px] px-2.5 rounded-lg border border-slate-700 bg-slate-900 text-slate-100 disabled:opacity-50"
                         />
                         <button
                           type="button"

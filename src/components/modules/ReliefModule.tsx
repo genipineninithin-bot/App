@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import {
   Ambulance,
   Building2,
-  Globe,
+  MapPin,
   Package,
   Phone,
   Plus,
@@ -16,7 +16,7 @@ import {
   ReliefResource,
   UserRole,
 } from '../../types/modules';
-import { TacticalGlobe3D } from '../TacticalGlobe3D';
+import { GoogleMapsPanel } from '../GoogleMapsPanel';
 import { plainReliefKind, plainReliefStatus } from '../../utils/plainLabels';
 
 interface ReliefModuleProps {
@@ -61,7 +61,7 @@ export const ReliefModule: React.FC<ReliefModuleProps> = ({
   const [kindFilter, setKindFilter] = useState<'All' | ReliefResource['kind']>('All');
   const [regionQuery, setRegionQuery] = useState('');
   const [showAdd, setShowAdd] = useState(false);
-  const [show3DMap, setShow3DMap] = useState(false);
+  const [showGoogleMaps, setShowGoogleMaps] = useState(false);
 
   const [newKind, setNewKind] = useState<ReliefResource['kind']>('Supply');
   const [newName, setNewName] = useState('');
@@ -120,7 +120,7 @@ export const ReliefModule: React.FC<ReliefModuleProps> = ({
     <div className="space-y-5">
       {/* Top Locator & Operations Controls */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-1 p-1 bg-[#0A0F1A] border border-slate-800 rounded-lg">
+        <div className="flex flex-wrap items-center gap-1 p-1 bg-slate-900 border border-slate-800 rounded-lg">
           {(['All', 'Hospital', 'Shelter', 'Supply', 'Vehicle'] as const)
             .filter((k) => canManageOps || k === 'All' || k === 'Hospital' || k === 'Shelter')
             .map((k) => (
@@ -153,19 +153,19 @@ export const ReliefModule: React.FC<ReliefModuleProps> = ({
             value={regionQuery}
             onChange={(e) => setRegionQuery(e.target.value)}
             placeholder="Filter by city or facility..."
-            className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-800 bg-[#0A0F1A] text-slate-100 placeholder:text-slate-500"
+            className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-800 bg-slate-900 text-slate-100 placeholder:text-slate-500"
           />
           <button
             type="button"
-            onClick={() => setShow3DMap((v) => !v)}
-            className={`min-h-[40px] px-3 py-2 text-xs font-medium rounded-lg border inline-flex items-center gap-1.5 ${
-              show3DMap
+            onClick={() => setShowGoogleMaps((v) => !v)}
+            className={`min-h-[40px] px-3 py-2 text-xs font-medium rounded-lg border inline-flex items-center gap-1.5 transition-colors ${
+              showGoogleMaps
                 ? 'border-blue-500 bg-blue-600/20 text-blue-200'
-                : 'border-slate-700 bg-[#0A0F1A] text-slate-100 hover:bg-slate-800'
+                : 'border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800'
             }`}
           >
-            <Globe className="w-3.5 h-3.5 text-blue-400" aria-hidden="true" />
-            <span>{show3DMap ? 'Hide 3D Relief Map' : '3D Relief Map'}</span>
+            <MapPin className="w-3.5 h-3.5 text-blue-400" aria-hidden="true" />
+            <span>{showGoogleMaps ? 'Hide Google Maps' : 'Google Maps'}</span>
           </button>
           {isAdmin && onCreateResource && (
             <button
@@ -180,8 +180,8 @@ export const ReliefModule: React.FC<ReliefModuleProps> = ({
         </div>
       </div>
 
-      {show3DMap && (
-        <TacticalGlobe3D
+      {showGoogleMaps && (
+        <GoogleMapsPanel
           forecasts={forecasts}
           incidents={incidents}
           alerts={alerts}
@@ -194,7 +194,7 @@ export const ReliefModule: React.FC<ReliefModuleProps> = ({
       {isAdmin && showAdd && (
         <form
           onSubmit={handleAdd}
-          className="p-4 rounded-xl border border-slate-800 bg-[#0A0F1A] space-y-3"
+          className="p-4 rounded-xl border border-slate-800 bg-slate-900 space-y-3"
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="text-xs font-semibold text-slate-100">
@@ -226,7 +226,7 @@ export const ReliefModule: React.FC<ReliefModuleProps> = ({
             <select
               value={newKind}
               onChange={(e) => setNewKind(e.target.value as ReliefResource['kind'])}
-              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-200"
+              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-200"
             >
               <option value="Supply">Food, Water &amp; Medicine</option>
               <option value="Vehicle">Ambulance / Rescue Vehicle</option>
@@ -240,7 +240,7 @@ export const ReliefModule: React.FC<ReliefModuleProps> = ({
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Facility, stock, or vehicle unit name"
-              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100"
+              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-100"
             />
             <input
               type="text"
@@ -249,7 +249,7 @@ export const ReliefModule: React.FC<ReliefModuleProps> = ({
               value={newRegion}
               onChange={(e) => setNewRegion(e.target.value)}
               placeholder="Region"
-              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100"
+              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-100"
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
@@ -259,28 +259,28 @@ export const ReliefModule: React.FC<ReliefModuleProps> = ({
               value={newQty}
               onChange={(e) => setNewQty(e.target.value)}
               placeholder="Quantity"
-              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100"
+              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-100"
             />
             <input
               type="text"
               value={newUnit}
               onChange={(e) => setNewUnit(e.target.value)}
               placeholder="Unit (beds, packs, vehicles)"
-              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100"
+              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-100"
             />
             <input
               type="text"
               value={newContact}
               onChange={(e) => setNewContact(e.target.value)}
               placeholder="Contact / radio ch"
-              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100"
+              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-100"
             />
             <input
               type="text"
               value={newAlloc}
               onChange={(e) => setNewAlloc(e.target.value)}
               placeholder="Allocated zone / incident"
-              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100"
+              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-100"
             />
           </div>
           <div className="flex justify-end">
@@ -296,7 +296,7 @@ export const ReliefModule: React.FC<ReliefModuleProps> = ({
 
       {/* Main Grid: Locator & Inventory + Emergency Contact Directory */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        <div className="lg:col-span-8 border border-slate-800 rounded-xl bg-[#0A0F1A] divide-y divide-slate-800 overflow-hidden">
+        <div className="lg:col-span-8 border border-slate-800 rounded-xl bg-slate-900 divide-y divide-slate-800 overflow-hidden">
           {visibleResources.length === 0 ? (
             <div className="p-6 text-center space-y-2.5">
               <p className="text-xs text-slate-400">
@@ -308,7 +308,7 @@ export const ReliefModule: React.FC<ReliefModuleProps> = ({
                   setKindFilter('All');
                   setRegionQuery('');
                 }}
-                className="min-h-[34px] px-3 py-1 text-xs font-medium rounded-lg border border-slate-700 bg-[#0D1422] text-slate-200 hover:bg-slate-800"
+                className="min-h-[34px] px-3 py-1 text-xs font-medium rounded-lg border border-slate-700 bg-slate-950 text-slate-200 hover:bg-slate-800"
               >
                 Show All Places
               </button>
@@ -382,7 +382,7 @@ export const ReliefModule: React.FC<ReliefModuleProps> = ({
                           });
                         }}
                         aria-label={`Status for ${res.name}`}
-                        className="min-h-[36px] px-2.5 rounded-lg border border-slate-700 bg-[#0D1422] text-slate-200"
+                        className="min-h-[36px] px-2.5 rounded-lg border border-slate-700 bg-slate-950 text-slate-200"
                       >
                         <option value="Available">Available</option>
                         <option value="Limited">Limited</option>
@@ -397,7 +397,7 @@ export const ReliefModule: React.FC<ReliefModuleProps> = ({
                           setQtyEdits((p) => ({ ...p, [res.id]: e.target.value }))
                         }
                         aria-label={`Quantity for ${res.name}`}
-                        className="min-h-[36px] px-2.5 rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100"
+                        className="min-h-[36px] px-2.5 rounded-lg border border-slate-700 bg-slate-950 text-slate-100"
                       />
                       <input
                         type="text"
@@ -406,7 +406,7 @@ export const ReliefModule: React.FC<ReliefModuleProps> = ({
                           setAllocEdits((p) => ({ ...p, [res.id]: e.target.value }))
                         }
                         aria-label={`Allocation for ${res.name}`}
-                        className="min-h-[36px] px-2.5 rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100"
+                        className="min-h-[36px] px-2.5 rounded-lg border border-slate-700 bg-slate-950 text-slate-100"
                       />
                       <button
                         type="button"
@@ -437,7 +437,7 @@ export const ReliefModule: React.FC<ReliefModuleProps> = ({
                           setDistEdits((p) => ({ ...p, [res.id]: e.target.value }))
                         }
                         placeholder={`Log distributed ${res.unit}...`}
-                        className="w-44 min-h-[32px] px-2.5 rounded-lg border border-slate-800 bg-[#0D1422] text-slate-100 text-[11px]"
+                        className="w-44 min-h-[32px] px-2.5 rounded-lg border border-slate-800 bg-slate-950 text-slate-100 text-[11px]"
                       />
                       <button
                         type="button"
@@ -470,7 +470,7 @@ export const ReliefModule: React.FC<ReliefModuleProps> = ({
         </div>
 
         {/* Emergency Contact Directory (User, Rescue, Admin) */}
-        <div className="lg:col-span-4 border border-slate-800 rounded-xl bg-[#0A0F1A] overflow-hidden h-fit">
+        <div className="lg:col-span-4 border border-slate-800 rounded-xl bg-slate-900 overflow-hidden h-fit">
           <div className="px-4 py-3 border-b border-slate-800 flex items-center gap-2 text-xs font-semibold text-slate-100">
             <Phone className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
             <span>Emergency Contact Directory</span>

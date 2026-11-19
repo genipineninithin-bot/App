@@ -4,8 +4,8 @@ import {
   Check,
   CheckCheck,
   CheckCircle2,
-  Globe,
   Mail,
+  MapPin,
   MessageSquare,
   Plus,
   RotateCcw,
@@ -243,7 +243,7 @@ export const AlertsModule: React.FC<AlertsModuleProps> = ({
     <div className="space-y-5">
       {/* Top Filter & Admin Create */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-1 p-1 bg-[#0A0F1A] border border-slate-800 rounded-lg">
+        <div className="flex flex-wrap items-center gap-1 p-1 bg-slate-900 border border-slate-800 rounded-lg">
           {(['All', 'Emergency', 'Disaster', 'Cybersecurity', 'Rescue Op'] as const)
             .filter((c) => c !== 'Rescue Op' || user.role !== 'citizen')
             .map((c) => (
@@ -267,7 +267,7 @@ export const AlertsModule: React.FC<AlertsModuleProps> = ({
             <button
               type="button"
               onClick={markAllRead}
-              className="min-h-[40px] px-3 py-2 text-xs font-medium rounded-lg border border-slate-700 bg-[#0A0F1A] text-slate-200 hover:bg-slate-800 inline-flex items-center gap-1.5"
+              className="min-h-[40px] px-3 py-2 text-xs font-medium rounded-lg border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800 inline-flex items-center gap-1.5"
             >
               <CheckCheck className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
               <span>Mark All Seen ({unreadCount})</span>
@@ -277,10 +277,10 @@ export const AlertsModule: React.FC<AlertsModuleProps> = ({
             <button
               type="button"
               onClick={onOpen3DMap}
-              className="min-h-[40px] px-3.5 py-2 text-xs font-medium rounded-lg border border-slate-700 bg-[#0A0F1A] text-slate-100 hover:bg-slate-800 inline-flex items-center gap-1.5"
+              className="min-h-[40px] px-3.5 py-2 text-xs font-medium rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-100 inline-flex items-center gap-1.5 transition-colors"
             >
-              <Globe className="w-3.5 h-3.5 text-blue-400" aria-hidden="true" />
-              <span>See on 3D Map</span>
+              <MapPin className="w-3.5 h-3.5 text-blue-400" aria-hidden="true" />
+              <span>See on Google Maps</span>
             </button>
           )}
           {isAdmin && onCreateAlert && (
@@ -315,7 +315,7 @@ export const AlertsModule: React.FC<AlertsModuleProps> = ({
       )}
 
       {/* Plain-English Color Guide */}
-      <div className="px-4 py-2.5 rounded-xl border border-slate-800 bg-[#0A0F1A] flex flex-wrap items-center justify-between gap-2 text-xs text-slate-300">
+      <div className="px-4 py-2.5 rounded-xl border border-slate-800 bg-slate-900 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-300">
         <span className="font-medium text-slate-200">Quick Alert Guide:</span>
         <div className="flex flex-wrap items-center gap-4 text-[11px]">
           <span className="text-red-400 font-medium">Red = Danger Now (Act right away)</span>
@@ -327,7 +327,7 @@ export const AlertsModule: React.FC<AlertsModuleProps> = ({
 
       {/* Email & SMS Notification Subscriptions (Citizen & Rescue Team) */}
       {showSmsEmailPrefs && (
-        <div className="p-4 rounded-xl border border-slate-800 bg-[#0A0F1A] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+        <div className="p-4 rounded-xl border border-slate-800 bg-slate-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
           <div>
             <div className="font-semibold text-slate-100">
               How Should We Send You Safety Alerts?
@@ -369,7 +369,7 @@ export const AlertsModule: React.FC<AlertsModuleProps> = ({
       {isAdmin && showCreate && (
         <form
           onSubmit={handleSubmit}
-          className="p-4 rounded-xl border border-slate-800 bg-[#0A0F1A] space-y-3"
+          className="p-4 rounded-xl border border-slate-800 bg-slate-900 space-y-3"
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="text-xs font-semibold text-slate-100">
@@ -393,7 +393,7 @@ export const AlertsModule: React.FC<AlertsModuleProps> = ({
                 key={tpl.label}
                 type="button"
                 onClick={() => applyTemplate(tpl)}
-                className="px-2.5 py-1 rounded-md border border-slate-700 bg-[#0D1422] hover:border-amber-500/60 text-[11px] text-slate-200 transition-colors"
+                className="px-2.5 py-1 rounded-md border border-slate-700 bg-slate-950 hover:border-amber-500/60 text-[11px] text-slate-200 transition-colors"
               >
                 {tpl.label}
               </button>
@@ -408,7 +408,7 @@ export const AlertsModule: React.FC<AlertsModuleProps> = ({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Short alert headline (e.g., [TEST DRILL] Flood Warning — Move to High Ground)"
-              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100"
+              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-100"
             />
             <input
               type="text"
@@ -417,14 +417,14 @@ export const AlertsModule: React.FC<AlertsModuleProps> = ({
               value={region}
               onChange={(e) => setRegion(e.target.value)}
               placeholder="City or area (e.g., Sendai Coast, Tokyo Bay, or Sacramento)"
-              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100"
+              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-100"
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value as AlertNotification['category'])}
-              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-200"
+              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-200"
             >
               <option value="Emergency">Emergency</option>
               <option value="Disaster">Disaster Warning</option>
@@ -434,7 +434,7 @@ export const AlertsModule: React.FC<AlertsModuleProps> = ({
             <select
               value={severity}
               onChange={(e) => setSeverity(e.target.value as AlertNotification['severity'])}
-              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-200"
+              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-200"
             >
               <option value="Critical">Danger Now (Critical)</option>
               <option value="High">High Risk</option>
@@ -444,7 +444,7 @@ export const AlertsModule: React.FC<AlertsModuleProps> = ({
             <select
               value={channel}
               onChange={(e) => setChannel(e.target.value as AlertNotification['channel'])}
-              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-200"
+              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-200"
             >
               <option value="All">App, Email &amp; Text (All)</option>
               <option value="Email & SMS">Email &amp; Text Only</option>
@@ -455,7 +455,7 @@ export const AlertsModule: React.FC<AlertsModuleProps> = ({
               onChange={(e) =>
                 setVisibility(e.target.value as AlertNotification['visibility'])
               }
-              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-200"
+              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-200"
             >
               <option value="public">Everyone Can See</option>
               <option value="rescue_only">Rescue Teams Only</option>
@@ -469,13 +469,13 @@ export const AlertsModule: React.FC<AlertsModuleProps> = ({
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Write what happened and what people should do in plain simple words..."
-            className="w-full p-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100"
+            className="w-full p-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-100"
           />
           <div className="flex flex-wrap items-center justify-end gap-2">
             <button
               type="submit"
               disabled={submittingMode !== null || !title.trim() || !message.trim()}
-              className="min-h-[40px] px-4 py-2 text-xs font-medium rounded-lg border border-slate-700 bg-[#0D1422] text-slate-200 hover:bg-slate-800 disabled:opacity-50"
+              className="min-h-[40px] px-4 py-2 text-xs font-medium rounded-lg border border-slate-700 bg-slate-950 text-slate-200 hover:bg-slate-800 disabled:opacity-50"
             >
               {submittingMode === 'Draft' ? 'Saving Draft...' : 'Save as Draft'}
             </button>
@@ -495,7 +495,7 @@ export const AlertsModule: React.FC<AlertsModuleProps> = ({
       )}
 
       {/* Alert Feed & History */}
-      <div className="divide-y divide-slate-800 border border-slate-800 rounded-xl bg-[#0A0F1A] overflow-hidden">
+      <div className="divide-y divide-slate-800 border border-slate-800 rounded-xl bg-slate-900 overflow-hidden">
         {visibleAlerts.length === 0 ? (
           <div className="p-6 text-center space-y-2 text-xs text-slate-400">
             <div className="font-semibold text-slate-200">No alerts in this category right now</div>

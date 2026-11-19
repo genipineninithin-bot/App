@@ -856,6 +856,7 @@ export async function createIncidentTicket(
     status: 'Dispatched',
     notes: clampStr(ticket.notes, 3, BLUEPRINT_LIMITS.notesMax),
     visibility,
+    verifiedByAdmin: isAdminUser ? Boolean(ticket.verifiedByAdmin ?? true) : false,
     reporterId: sanitizeDocId(reporterUid, BLUEPRINT_LIMITS.uidMax),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),

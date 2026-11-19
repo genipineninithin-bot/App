@@ -23,7 +23,7 @@ import {
   UserRole,
 } from '../../types/modules';
 import { WEATHER_STATIONS } from '../../data/platformData';
-import { TacticalGlobe3D } from '../TacticalGlobe3D';
+import { GoogleMapsPanel } from '../GoogleMapsPanel';
 import {
   plainDisasterCategory,
   plainIncidentDomain,
@@ -44,32 +44,8 @@ interface CommandCenterModuleProps {
   reliefCount?: number;
   urlsScannedCount?: number;
   phishingDetectedCount?: number;
+  liveLocation?: { lat: number; lng: number } | null;
   onOpenModule: (id: ModuleId) => void;
-}
-
-const LANDMASS_PATHS = [
-  'M 95,78 L 145,62 L 210,58 L 265,70 L 290,92 L 312,108 L 295,126 L 270,136 L 258,162 L 236,184 L 224,205 L 245,222 L 230,232 L 204,218 L 185,198 L 160,175 L 145,148 L 122,126 L 86,112 L 72,96 Z',
-  'M 326,34 L 385,26 L 415,46 L 392,76 L 348,74 L 328,55 Z',
-  'M 252,226 L 288,224 L 326,246 L 352,276 L 344,316 L 318,358 L 295,405 L 278,434 L 266,416 L 262,374 L 248,325 L 238,274 Z',
-  'M 455,112 L 478,94 L 502,68 L 538,58 L 566,72 L 572,104 L 552,124 L 528,136 L 505,134 L 484,142 L 464,138 L 452,126 Z',
-  'M 458,92 L 470,88 L 474,104 L 460,108 Z',
-  'M 452,154 L 496,148 L 538,158 L 564,182 L 588,205 L 598,236 L 574,274 L 558,318 L 536,346 L 516,342 L 504,302 L 492,262 L 462,240 L 444,210 L 442,178 Z',
-  'M 568,72 L 642,58 L 748,54 L 845,66 L 912,84 L 896,108 L 856,118 L 832,146 L 818,176 L 796,192 L 774,214 L 748,228 L 728,202 L 708,216 L 686,238 L 664,206 L 642,188 L 614,196 L 588,182 L 566,162 L 554,132 Z',
-  'M 868,128 L 882,118 L 894,136 L 880,156 L 864,158 Z',
-  'M 830,194 L 842,194 L 844,218 L 832,216 Z',
-  'M 806,298 L 864,292 L 906,312 L 914,348 L 886,374 L 842,368 L 804,352 L 794,324 Z',
-];
-
-function coordsForRegion(region: string): { x: number; y: number } {
-  const r = region.toLowerCase();
-  if (r.includes('sendai') || r.includes('japan')) return { x: 882, y: 142 };
-  if (r.includes('luzon') || r.includes('philippines')) return { x: 836, y: 204 };
-  if (r.includes('california') || r.includes('sacramento')) return { x: 164, y: 146 };
-  if (r.includes('rhine') || r.includes('germany') || r.includes('munich')) return { x: 522, y: 118 };
-  if (r.includes('windows')) return { x: 210, y: 142 };
-  if (r.includes('android') || r.includes('mobile')) return { x: 874, y: 152 };
-  if (r.includes('ot')) return { x: 530, y: 124 };
-  return { x: 500, y: 180 };
 }
 
 function severityColor(sev: Severity): string {
@@ -97,19 +73,13 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
   reliefCount = 0,
   urlsScannedCount = 0,
   phishingDetectedCount = 0,
+  liveLocation = null,
   onOpenModule,
 }) => {
   const isAdmin = userRole === 'administrator';
   const isRescue = userRole === 'rescue';
   const showCyberSummary = isAdmin || userRole === 'citizen';
 
-  const [mapMode, setMapMode] = useState<'3d' | '2d'>('3d');
-  const [focusedPin, setFocusedPin] = useState<{
-    id: string;
-    title: string;
-    detail: string;
-    targetModule: ModuleId;
-  } | null>(null);
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
   const criticalForecasts = forecasts.filter((f) => f.severity === 'Critical').length;
@@ -181,27 +151,6 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
     hoverIdx !== null && safeSeries[hoverIdx]
       ? safeSeries[hoverIdx]
       : safeSeries[safeSeries.length - 1];
-
-  const mapPins = [
-    ...forecasts.slice(0, 5).map((f) => ({
-      id: f.id,
-      kind: 'disaster' as const,
-      title: f.title,
-      detail: `${plainDisasterCategory(f.category)} · ${f.metric} · ${f.confidencePct}% certainty`,
-      targetModule: 'disaster' as ModuleId,
-      pt: coordsForRegion(f.region),
-    })),
-    ...(isAdmin
-      ? activeThreats.slice(0, 4).map((t) => ({
-          id: t.id,
-          kind: 'cyber' as const,
-          title: t.title,
-          detail: `${plainThreatVector(t.vector)} · ${t.platform} · ${t.affectedHosts} devices`,
-          targetModule: 'cyber' as ModuleId,
-          pt: coordsForRegion(t.platform),
-        }))
-      : []),
-  ];
 
   const quickModules: {
     id: ModuleId;
@@ -280,7 +229,7 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
   return (
     <div className="space-y-5">
       {/* Top Situational KPI Strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 border border-slate-800 rounded-xl bg-[#0A0F1A] divide-y lg:divide-y-0 lg:divide-x divide-slate-800 overflow-hidden">
+      <div className="grid grid-cols-2 lg:grid-cols-4 border border-slate-800 rounded-xl bg-slate-900 divide-y lg:divide-y-0 lg:divide-x divide-slate-800 overflow-hidden">
         <button
           type="button"
           onClick={() => onOpenModule('disaster')}
@@ -395,7 +344,7 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
                   key={m.id}
                   type="button"
                   onClick={() => onOpenModule(m.id)}
-                  className="min-h-[56px] p-3 rounded-xl border border-slate-800 bg-[#0A0F1A] hover:bg-[#111A2E] hover:border-blue-500/60 text-left transition-all flex flex-col justify-between gap-1.5"
+                  className="min-h-[56px] p-3 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 hover:border-blue-500/60 text-left transition-all flex flex-col justify-between gap-1.5"
                 >
                   <div className="flex items-center justify-between gap-2 w-full">
                     <span className="inline-flex items-center gap-1.5 text-[11px] font-mono text-slate-400">
@@ -416,7 +365,7 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
 
       {/* Live Statistics & Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        <div className="lg:col-span-7 border border-slate-800 rounded-xl bg-[#0A0F1A] p-4">
+        <div className="lg:col-span-7 border border-slate-800 rounded-xl bg-slate-900 p-4">
           <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
             <h3 className="text-xs font-semibold text-slate-100">
               Last 24 Hours Activity &amp; Fixed Issues
@@ -501,7 +450,7 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
         </div>
 
         {/* Severity Distribution & Disaster Risk Breakdown */}
-        <div className="lg:col-span-5 border border-slate-800 rounded-xl bg-[#0A0F1A] p-4 flex flex-col justify-between gap-4">
+        <div className="lg:col-span-5 border border-slate-800 rounded-xl bg-slate-900 p-4 flex flex-col justify-between gap-4">
           <div className="space-y-3">
             <h3 className="text-xs font-semibold text-slate-100">
               Current Risk Levels
@@ -543,135 +492,33 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
         </div>
       </div>
 
-      {/* Disaster Risk Overview + 3D Alerts & Impact Map */}
+      {/* Disaster Risk Overview + Google Maps */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         <div className="lg:col-span-8 space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-xs font-semibold text-slate-200">
-              Global Alerts, Disasters &amp; Help Map
+              Google Maps — Alerts, Disasters &amp; Help Locations
             </span>
-            <div className="inline-flex items-center p-0.5 rounded-lg border border-slate-800 bg-[#0A0F1A] text-[11px]">
-              <button
-                type="button"
-                onClick={() => setMapMode('3d')}
-                className={`min-h-[28px] px-2.5 py-0.5 rounded-md font-medium transition-colors ${
-                  mapMode === '3d'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-400 hover:text-slate-100'
-                }`}
-              >
-                3D Globe
-              </button>
-              <button
-                type="button"
-                onClick={() => setMapMode('2d')}
-                className={`min-h-[28px] px-2.5 py-0.5 rounded-md font-medium transition-colors ${
-                  mapMode === '2d'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-400 hover:text-slate-100'
-                }`}
-              >
-                2D Flat Map
-              </button>
-            </div>
+            <span className="text-[11px] font-mono text-teal-400">
+              Interactive Street, Satellite &amp; Terrain View
+            </span>
           </div>
 
-          {mapMode === '3d' ? (
-            <TacticalGlobe3D
-              forecasts={forecasts}
-              incidents={incidents}
-              alerts={alerts}
-              threats={threats}
-              resources={resources}
-              showCyber={isAdmin}
-              heightClass="h-72 sm:h-80 lg:h-[360px]"
-              onSelectModule={onOpenModule}
-            />
-          ) : (
-            <div className="border border-slate-800 rounded-xl bg-[#0A0F1A] overflow-hidden">
-              <div className="px-4 py-2.5 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs font-semibold text-slate-100">
-                  2D Disaster &amp; Risk Map
-                </span>
-                <span className="text-[11px] text-slate-400">
-                  Tap any dot to see what is happening there
-                </span>
-              </div>
-
-              <div className="relative h-60 sm:h-72 bg-[#070B13]">
-                <svg
-                  viewBox="0 0 1000 500"
-                  preserveAspectRatio="xMidYMid slice"
-                  className="w-full h-full"
-                >
-                  <g stroke="#1e293b" strokeOpacity="0.55" strokeWidth="0.7">
-                    {[125, 250, 375].map((y) => (
-                      <line key={y} x1="0" y1={y} x2="1000" y2={y} strokeDasharray="3 4" />
-                    ))}
-                    {[250, 500, 750].map((x) => (
-                      <line key={x} x1={x} y1="0" x2={x} y2="500" strokeDasharray="3 4" />
-                    ))}
-                  </g>
-
-                  <g fill="#121B2E" stroke="#253654" strokeWidth="0.9">
-                    {LANDMASS_PATHS.map((d, i) => (
-                      <path key={i} d={d} />
-                    ))}
-                  </g>
-
-                  {mapPins.map((pin) => {
-                    const color = pin.kind === 'disaster' ? '#f59e0b' : '#ef4444';
-                    const offset = pin.kind === 'cyber' ? 8 : 0;
-                    return (
-                      <g
-                        key={pin.id}
-                        transform={`translate(${pin.pt.x + offset}, ${pin.pt.y - offset})`}
-                        onClick={() =>
-                          setFocusedPin({
-                            id: pin.id,
-                            title: pin.title,
-                            detail: pin.detail,
-                            targetModule: pin.targetModule,
-                          })
-                        }
-                        className="cursor-pointer"
-                        role="button"
-                        tabIndex={0}
-                        aria-label={pin.title}
-                      >
-                        <circle r="13" fill={color} fillOpacity="0.16" />
-                        <circle r="5" fill={color} stroke="#ffffff" strokeWidth="1.2" />
-                      </g>
-                    );
-                  })}
-                </svg>
-              </div>
-
-              {focusedPin && (
-                <div className="px-4 py-3 border-t border-slate-800 bg-[#0D1422] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="text-xs font-semibold text-slate-100 truncate">
-                      {focusedPin.title}
-                    </div>
-                    <div className="text-[11px] text-slate-400 truncate">
-                      {focusedPin.detail}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onOpenModule(focusedPin.targetModule)}
-                    className="min-h-[38px] px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 whitespace-nowrap shrink-0"
-                  >
-                    See Full Details
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+          <GoogleMapsPanel
+            forecasts={forecasts}
+            incidents={incidents}
+            alerts={alerts}
+            threats={threats}
+            resources={resources}
+            showCyber={isAdmin}
+            heightClass="h-80 sm:h-96 lg:h-[400px]"
+            initialUserLocation={liveLocation}
+            onSelectModule={onOpenModule}
+          />
         </div>
 
         {/* Right Side Summary */}
-        <div className="lg:col-span-4 border border-slate-800 rounded-xl bg-[#0A0F1A] p-4 flex flex-col justify-between gap-4">
+        <div className="lg:col-span-4 border border-slate-800 rounded-xl bg-slate-900 p-4 flex flex-col justify-between gap-4">
           {showCyberSummary ? (
             <>
               <div className="space-y-3">
@@ -752,7 +599,7 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
 
       {/* Bottom Split: Urgent Emergencies Right Now + Latest Emergency Reports */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        <div className="lg:col-span-6 border border-slate-800 rounded-xl bg-[#0A0F1A] overflow-hidden">
+        <div className="lg:col-span-6 border border-slate-800 rounded-xl bg-slate-900 overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
@@ -805,7 +652,7 @@ export const CommandCenterModule: React.FC<CommandCenterModuleProps> = ({
           </div>
         </div>
 
-        <div className="lg:col-span-6 border border-slate-800 rounded-xl bg-[#0A0F1A] overflow-hidden">
+        <div className="lg:col-span-6 border border-slate-800 rounded-xl bg-slate-900 overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
             <h3 className="text-xs font-semibold text-slate-100">Latest Emergency Reports</h3>
             <span className="text-[11px] tabular-nums text-slate-400">

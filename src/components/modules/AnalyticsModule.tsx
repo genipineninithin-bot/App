@@ -168,7 +168,7 @@ ${incidents.map((i) => `<tr><td>${i.id}</td><td>${i.title}</td><td>${i.severity}
             <button
               type="button"
               onClick={handleExport}
-              className="min-h-[40px] px-3.5 py-2 text-xs font-medium rounded-lg border border-slate-700 bg-[#0A0F1A] text-slate-100 hover:bg-slate-800 transition-colors flex items-center gap-1.5 whitespace-nowrap"
+              className="min-h-[40px] px-3.5 py-2 text-xs font-medium rounded-lg border border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800 transition-colors flex items-center gap-1.5 whitespace-nowrap"
             >
               <Download className="w-3.5 h-3.5" aria-hidden="true" />
               <span>Export CSV</span>
@@ -187,7 +187,7 @@ ${incidents.map((i) => `<tr><td>${i.id}</td><td>${i.title}</td><td>${i.severity}
 
       {/* Admin KPI Strip: Population Exposure, Casualties, AI Damage Reports */}
       {isAdmin && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 border border-slate-800 rounded-xl bg-[#0A0F1A] divide-y sm:divide-y-0 sm:divide-x divide-slate-800">
+        <div className="grid grid-cols-2 sm:grid-cols-4 border border-slate-800 rounded-xl bg-slate-900 divide-y sm:divide-y-0 sm:divide-x divide-slate-800">
           <div className="p-3.5">
             <div className="text-[11px] text-slate-400">Population Exposure</div>
             <div className="mt-1 font-display text-xl font-bold tabular-nums text-amber-400">
@@ -217,7 +217,7 @@ ${incidents.map((i) => `<tr><td>${i.id}</td><td>${i.title}</td><td>${i.severity}
 
       {/* Rescue Performance Analytics (Admin & Rescue) */}
       {showRescuePerformance && (
-        <div className="border border-slate-800 rounded-xl bg-[#0A0F1A] p-4 space-y-3">
+        <div className="border border-slate-800 rounded-xl bg-slate-900 p-4 space-y-3">
           <div className="flex items-center justify-between text-xs">
             <span className="font-semibold text-slate-100 inline-flex items-center gap-1.5">
               <Activity className="w-4 h-4 text-emerald-400" aria-hidden="true" />
@@ -256,7 +256,7 @@ ${incidents.map((i) => `<tr><td>${i.id}</td><td>${i.title}</td><td>${i.severity}
       {/* Disaster Trends + Cyber Threat Statistics (User & Admin) */}
       {showTrendAndCyberStats && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-          <div className="lg:col-span-7 border border-slate-800 rounded-xl bg-[#0A0F1A] p-4">
+          <div className="lg:col-span-7 border border-slate-800 rounded-xl bg-slate-900 p-4">
             <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
               <h3 className="text-xs font-semibold text-slate-100">
                 24-Hour Disasters &amp; Fixed Issues
@@ -327,7 +327,7 @@ ${incidents.map((i) => `<tr><td>${i.id}</td><td>${i.title}</td><td>${i.severity}
             </svg>
           </div>
 
-          <div className="lg:col-span-5 border border-slate-800 rounded-xl bg-[#0A0F1A] p-4 space-y-3">
+          <div className="lg:col-span-5 border border-slate-800 rounded-xl bg-slate-900 p-4 space-y-3">
             <h3 className="text-xs font-semibold text-slate-100">
               Top Online &amp; Scam Threats
             </h3>
@@ -353,14 +353,14 @@ ${incidents.map((i) => `<tr><td>${i.id}</td><td>${i.title}</td><td>${i.severity}
 
       {/* Disaster Risk Category Comparison */}
       {showTrendAndCyberStats && (
-        <div className="border border-slate-800 rounded-xl bg-[#0A0F1A] p-4 space-y-3">
+        <div className="border border-slate-800 rounded-xl bg-slate-900 p-4 space-y-3">
           <div className="flex items-center justify-between text-xs">
             <span className="font-semibold text-slate-100">Warnings by Disaster Type</span>
             <span className="font-mono text-slate-400">{forecasts.length} active areas</span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {disasterCategoryCounts.map(([cat, count]) => (
-              <div key={cat} className="p-3 rounded-lg border border-slate-800 bg-[#0D1422] flex items-center justify-between text-xs">
+              <div key={cat} className="p-3 rounded-lg border border-slate-800 bg-slate-950 flex items-center justify-between text-xs">
                 <span className="text-slate-300">{plainDisasterCategory(cat)}</span>
                 <span className="font-mono font-semibold text-amber-400 tabular-nums">{count}</span>
               </div>
@@ -371,7 +371,7 @@ ${incidents.map((i) => `<tr><td>${i.id}</td><td>${i.title}</td><td>${i.severity}
 
       {/* Admin Incident Analysis by Location, Type, Date & AI Damage Assessment Reports */}
       {isAdmin && (
-        <div className="border border-slate-800 rounded-xl bg-[#0A0F1A] overflow-hidden">
+        <div className="border border-slate-800 rounded-xl bg-slate-900 overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-xs font-semibold text-slate-100">
               Incident Analysis by Location, Type &amp; AI Damage Reports
@@ -381,7 +381,7 @@ ${incidents.map((i) => `<tr><td>${i.id}</td><td>${i.title}</td><td>${i.severity}
                 value={domainFilter}
                 onChange={(e) => setDomainFilter(e.target.value)}
                 aria-label="Filter incidents by disaster type"
-                className="min-h-[34px] px-2.5 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-200"
+                className="min-h-[34px] px-2.5 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-200"
               >
                 <option value="All">All Types</option>
                 <option value="Disaster">Disaster</option>
@@ -392,7 +392,7 @@ ${incidents.map((i) => `<tr><td>${i.id}</td><td>${i.title}</td><td>${i.severity}
                 value={timeframeFilter}
                 onChange={(e) => setTimeframeFilter(e.target.value)}
                 aria-label="Filter incidents by timeframe"
-                className="min-h-[34px] px-2.5 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-200"
+                className="min-h-[34px] px-2.5 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-200"
               >
                 <option value="All">All Dates</option>
                 <option value="Today">Recent / Active</option>
@@ -401,7 +401,7 @@ ${incidents.map((i) => `<tr><td>${i.id}</td><td>${i.title}</td><td>${i.severity}
                 value={regionFilter}
                 onChange={(e) => setRegionFilter(e.target.value)}
                 aria-label="Filter incidents by location"
-                className="min-h-[34px] px-2.5 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-200"
+                className="min-h-[34px] px-2.5 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-200"
               >
                 {regions.map((r) => (
                   <option key={r} value={r}>
@@ -440,7 +440,7 @@ ${incidents.map((i) => `<tr><td>${i.id}</td><td>${i.title}</td><td>${i.severity}
 
       {/* Correlated Nexus Matrix */}
       {showTrendAndCyberStats && (
-        <div className="border border-slate-800 rounded-xl bg-[#0A0F1A] overflow-hidden">
+        <div className="border border-slate-800 rounded-xl bg-slate-900 overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
             <h3 className="text-xs font-semibold text-slate-100">Connected Disaster &amp; Scam Warnings</h3>
             <span className="text-xs font-mono tabular-nums text-slate-400">{correlated.length} linked</span>

@@ -17,7 +17,7 @@ import {
   ReliefResource,
   UserRole,
 } from '../../types/modules';
-import { TacticalGlobe3D } from '../TacticalGlobe3D';
+import { GoogleMapsPanel } from '../GoogleMapsPanel';
 import { plainDisasterCategory, plainSeverity } from '../../utils/plainLabels';
 
 interface DisasterModuleProps {
@@ -55,26 +55,6 @@ const MONTHLY_TREND_SAMPLE = [
   { month: 'Nov', events: 5, rainMm: 94 },
 ];
 
-const REGION_MAP_COORDS: Record<string, { x: number; y: number }> = {
-  sendai: { x: 760, y: 120 },
-  japan: { x: 760, y: 120 },
-  luzon: { x: 715, y: 175 },
-  philippines: { x: 715, y: 175 },
-  california: { x: 145, y: 130 },
-  sacramento: { x: 145, y: 130 },
-  rhine: { x: 455, y: 100 },
-  germany: { x: 455, y: 100 },
-  munich: { x: 470, y: 112 },
-};
-
-function mapCoords(region: string): { x: number; y: number } {
-  const lower = region.toLowerCase();
-  for (const [k, pt] of Object.entries(REGION_MAP_COORDS)) {
-    if (lower.includes(k)) return pt;
-  }
-  return { x: 430, y: 150 };
-}
-
 function toRiskLevel(sev: DisasterForecast['severity']): 'Low' | 'Medium' | 'High' {
   if (sev === 'Critical' || sev === 'High') return 'High';
   if (sev === 'Moderate') return 'Medium';
@@ -97,11 +77,9 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
   const isAdmin = userRole === 'administrator';
   const showHistorical = userRole === 'citizen' || isAdmin;
 
-  const [mapMode, setMapMode] = useState<'3d' | '2d'>('3d');
   const [horizon, setHorizon] = useState<'All' | '6h' | '24h' | '72h'>('All');
   const [category, setCategory] = useState<string>('All');
   const [riskFilter, setRiskFilter] = useState<'All' | 'High' | 'Medium' | 'Low'>('All');
-  const [selectedMapNote, setSelectedMapNote] = useState<string | null>(null);
   const [showWarningForm, setShowWarningForm] = useState(false);
 
   // Interactive Disaster Risk Predictor State
@@ -176,7 +154,7 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
   return (
     <div className="space-y-5">
       {/* Top Summary Strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 border border-slate-800 rounded-xl bg-[#0A0F1A] divide-y sm:divide-y-0 sm:divide-x divide-slate-800">
+      <div className="grid grid-cols-2 sm:grid-cols-4 border border-slate-800 rounded-xl bg-slate-900 divide-y sm:divide-y-0 sm:divide-x divide-slate-800">
         <div className="p-3.5">
           <div className="text-[11px] text-slate-400">Active Warnings</div>
           <div className="mt-1 font-display text-xl font-bold tabular-nums text-slate-100">
@@ -206,7 +184,7 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
       {/* Controls */}
       <div className="flex flex-wrap items-center justify-between gap-2.5">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1 p-1 bg-[#0A0F1A] border border-slate-800 rounded-lg">
+          <div className="flex items-center gap-1 p-1 bg-slate-900 border border-slate-800 rounded-lg">
             {(['All', '6h', '24h', '72h'] as const).map((h) => (
               <button
                 key={h}
@@ -233,7 +211,7 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
             value={category}
             onChange={(e) => setCategory(e.target.value)}
             aria-label="Filter disaster type"
-            className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-800 bg-[#0A0F1A] text-slate-200"
+            className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-800 bg-slate-900 text-slate-200"
           >
             <option value="All">All Disasters</option>
             <option value="Flood">Floods</option>
@@ -247,7 +225,7 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
             value={riskFilter}
             onChange={(e) => setRiskFilter(e.target.value as typeof riskFilter)}
             aria-label="Filter risk level"
-            className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-800 bg-[#0A0F1A] text-slate-200"
+            className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-800 bg-slate-900 text-slate-200"
           >
             <option value="All">All Risk Levels</option>
             <option value="High">High Risk</option>
@@ -278,17 +256,17 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
             type="button"
             onClick={onSyncUsgs}
             disabled={isSyncing}
-            className="min-h-[40px] px-3.5 py-2 text-xs font-medium rounded-lg border border-slate-700 bg-[#0A0F1A] text-slate-100 hover:bg-slate-800 transition-colors flex items-center gap-1.5 whitespace-nowrap disabled:opacity-60"
+            className="min-h-[40px] px-3.5 py-2 text-xs font-medium rounded-lg border border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800 transition-colors flex items-center gap-1.5 whitespace-nowrap disabled:opacity-60"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} aria-hidden="true" />
-            <span>{isSyncing ? 'Checking Earthquakes...' : 'Check Live Earthquakes'}</span>
+            <span>{isSyncing ? 'Syncing Live Disasters...' : 'Sync Live Disasters'}</span>
           </button>
         </div>
       </div>
 
       {/* Interactive Environmental Disaster Risk Predictor */}
       {showPredictor && (
-        <div className="p-4 rounded-xl border border-blue-500/35 bg-[#0A0F1A] space-y-3 text-xs">
+        <div className="p-4 rounded-xl border border-blue-500/35 bg-slate-900 space-y-3 text-xs">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="font-semibold text-blue-300">
               Simple Weather &amp; Disaster Risk Calculator
@@ -338,7 +316,7 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
                 <select
                   value={predType}
                   onChange={(e) => setPredType(e.target.value)}
-                  className="w-full min-h-[38px] px-2.5 rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100"
+                  className="w-full min-h-[38px] px-2.5 rounded-lg border border-slate-700 bg-slate-950 text-slate-100"
                 >
                   <option value="Flood">Flood</option>
                   <option value="Cyclone">Storm / Cyclone</option>
@@ -354,7 +332,7 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
                   value={predLocation}
                   onChange={(e) => setPredLocation(e.target.value)}
                   required
-                  className="w-full min-h-[38px] px-2.5 rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100"
+                  className="w-full min-h-[38px] px-2.5 rounded-lg border border-slate-700 bg-slate-950 text-slate-100"
                 />
               </label>
               <label className="space-y-1">
@@ -364,7 +342,7 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
                   min={0}
                   value={predRain}
                   onChange={(e) => setPredRain(e.target.value)}
-                  className="w-full min-h-[38px] px-2.5 rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100"
+                  className="w-full min-h-[38px] px-2.5 rounded-lg border border-slate-700 bg-slate-950 text-slate-100"
                 />
               </label>
               <label className="space-y-1">
@@ -375,7 +353,7 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
                     value={predTemp}
                     onChange={(e) => setPredTemp(e.target.value)}
                     aria-label="Temperature Celsius"
-                    className="w-1/2 min-h-[38px] px-2 rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100"
+                    className="w-1/2 min-h-[38px] px-2 rounded-lg border border-slate-700 bg-slate-950 text-slate-100"
                   />
                   <input
                     type="number"
@@ -384,7 +362,7 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
                     value={predHumidity}
                     onChange={(e) => setPredHumidity(e.target.value)}
                     aria-label="Humidity percent"
-                    className="w-1/2 min-h-[38px] px-2 rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100"
+                    className="w-1/2 min-h-[38px] px-2 rounded-lg border border-slate-700 bg-slate-950 text-slate-100"
                   />
                 </div>
               </label>
@@ -395,7 +373,7 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
                   min={0}
                   value={predWind}
                   onChange={(e) => setPredWind(e.target.value)}
-                  className="w-full min-h-[38px] px-2.5 rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100"
+                  className="w-full min-h-[38px] px-2.5 rounded-lg border border-slate-700 bg-slate-950 text-slate-100"
                 />
               </label>
             </div>
@@ -417,7 +395,7 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
           )}
 
           {predResult && (
-            <div className="p-3.5 rounded-lg border border-slate-800 bg-[#0D1422] space-y-2">
+            <div className="p-3.5 rounded-lg border border-slate-800 bg-slate-950 space-y-2">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span
@@ -461,7 +439,7 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
       {isAdmin && showWarningForm && (
         <form
           onSubmit={handleWarningSubmit}
-          className="p-4 rounded-xl border border-amber-500/30 bg-[#0A0F1A] space-y-3"
+          className="p-4 rounded-xl border border-amber-500/30 bg-slate-900 space-y-3"
         >
           <div className="text-xs font-semibold text-amber-300">
             Early Warning Generation (Administrator Broadcast)
@@ -474,7 +452,7 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
               value={warnTitle}
               onChange={(e) => setWarnTitle(e.target.value)}
               placeholder="Warning headline (e.g., Coastal Flash Flood Advisory)"
-              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100"
+              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-100"
             />
             <input
               type="text"
@@ -483,14 +461,14 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
               value={warnRegion}
               onChange={(e) => setWarnRegion(e.target.value)}
               placeholder="Target region (e.g., Sendai Coastal Sector)"
-              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100"
+              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-100"
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <select
               value={warnCategory}
               onChange={(e) => setWarnCategory(e.target.value as DisasterForecast['category'])}
-              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-200"
+              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-200"
             >
               <option value="Flood">Flood</option>
               <option value="Cyclone">Cyclone</option>
@@ -501,7 +479,7 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
             <select
               value={warnSeverity}
               onChange={(e) => setWarnSeverity(e.target.value as DisasterForecast['severity'])}
-              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-200"
+              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-200"
             >
               <option value="Critical">Critical (High Risk)</option>
               <option value="High">High Risk</option>
@@ -511,7 +489,7 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
             <select
               value={warnHorizon}
               onChange={(e) => setWarnHorizon(e.target.value as DisasterForecast['horizon'])}
-              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-200"
+              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-200"
             >
               <option value="6h">6h horizon</option>
               <option value="24h">24h horizon</option>
@@ -522,7 +500,7 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
               value={warnMetric}
               onChange={(e) => setWarnMetric(e.target.value)}
               placeholder="Metric (e.g., 58 mm/h rain)"
-              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100"
+              className="min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-100"
             />
           </div>
           <input
@@ -530,7 +508,7 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
             value={warnSummary}
             onChange={(e) => setWarnSummary(e.target.value)}
             placeholder="Operational early warning summary..."
-            className="w-full min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-[#0D1422] text-slate-100"
+            className="w-full min-h-[40px] px-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-100"
           />
           <div className="flex justify-end">
             <button
@@ -550,109 +528,25 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
             <span className="font-semibold text-slate-200 inline-flex items-center gap-1.5">
               <Compass className="w-3.5 h-3.5 text-amber-400" aria-hidden="true" />
-              Disaster-Prone Zones, Alerts &amp; Impact Map
+              Google Maps — Disaster-Prone Zones &amp; Active Incidents
             </span>
-            <div className="inline-flex items-center p-0.5 rounded-lg border border-slate-800 bg-[#0A0F1A] text-[11px]">
-              <button
-                type="button"
-                onClick={() => setMapMode('3d')}
-                className={`min-h-[28px] px-2.5 py-0.5 rounded-md font-medium transition-colors ${
-                  mapMode === '3d'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-400 hover:text-slate-100'
-                }`}
-              >
-                3D Map
-              </button>
-              <button
-                type="button"
-                onClick={() => setMapMode('2d')}
-                className={`min-h-[28px] px-2.5 py-0.5 rounded-md font-medium transition-colors ${
-                  mapMode === '2d'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-400 hover:text-slate-100'
-                }`}
-              >
-                2D Overlay
-              </button>
-            </div>
+            <span className="text-[11px] font-mono text-teal-400">
+              {forecasts.length} zones · {incidents.length} incidents
+            </span>
           </div>
 
-          {mapMode === '3d' ? (
-            <TacticalGlobe3D
-              forecasts={forecasts}
-              incidents={incidents}
-              alerts={alerts}
-              resources={resources}
-              heightClass="h-64 sm:h-72"
-              onSelectModule={onOpenModule}
-            />
-          ) : (
-            <div className="border border-slate-800 rounded-xl bg-[#0A0F1A] overflow-hidden">
-              <div className="px-4 py-2.5 border-b border-slate-800 flex items-center justify-between text-xs">
-                <span className="font-semibold text-slate-100">
-                  2D Disaster-Prone Zones &amp; Incident Overlay
-                </span>
-                <span className="text-[11px] font-mono text-slate-400">
-                  {forecasts.length} zones · {incidents.length} incidents
-                </span>
-              </div>
-              <div className="bg-[#070B13] h-52 relative">
-                <svg viewBox="0 0 880 260" className="w-full h-full">
-                  <rect x="0" y="0" width="880" height="260" fill="#070B13" />
-                  {[65, 130, 195].map((y) => (
-                    <line key={y} x1="0" y1={y} x2="880" y2={y} stroke="#162136" strokeDasharray="3 4" />
-                  ))}
-                  {[220, 440, 660].map((x) => (
-                    <line key={x} x1={x} y1="0" x2={x} y2="260" stroke="#162136" strokeDasharray="3 4" />
-                  ))}
-                  {forecasts.slice(0, 6).map((f) => {
-                    const pt = mapCoords(f.region);
-                    const risk = toRiskLevel(f.severity);
-                    const color = risk === 'High' ? '#ef4444' : risk === 'Medium' ? '#f59e0b' : '#38bdf8';
-                    return (
-                      <g
-                        key={f.id}
-                        transform={`translate(${pt.x}, ${pt.y})`}
-                        className="cursor-pointer"
-                        onClick={() =>
-                          setSelectedMapNote(`${f.id} (${risk} Risk) — ${f.title} · ${f.metric}`)
-                        }
-                      >
-                        <circle r="18" fill={color} fillOpacity="0.14" stroke={color} strokeOpacity="0.4" />
-                        <circle r="5" fill={color} />
-                      </g>
-                    );
-                  })}
-                  {incidents.slice(0, 5).map((inc, idx) => {
-                    const pt = mapCoords(inc.region);
-                    return (
-                      <g
-                        key={inc.id}
-                        transform={`translate(${pt.x + 12 + idx * 3}, ${pt.y - 10})`}
-                        className="cursor-pointer"
-                        onClick={() =>
-                          setSelectedMapNote(`Incident ${inc.id} (${inc.status}) — ${inc.title}`)
-                        }
-                      >
-                        <rect x="-4" y="-4" width="8" height="8" fill="#3b82f6" stroke="#ffffff" strokeWidth="1" />
-                      </g>
-                    );
-                  })}
-                </svg>
-              </div>
-              <div className="px-4 py-2 border-t border-slate-800 text-[11px] font-mono text-slate-300 flex items-center justify-between gap-2">
-                <span className="truncate">
-                  {selectedMapNote || 'Circles: Disaster-prone risk zones · Squares: Active incident tickets'}
-                </span>
-                <span className="text-slate-500 shrink-0">Tap pin to inspect</span>
-              </div>
-            </div>
-          )}
+          <GoogleMapsPanel
+            forecasts={forecasts}
+            incidents={incidents}
+            alerts={alerts}
+            resources={resources}
+            heightClass="h-72 sm:h-80"
+            onSelectModule={onOpenModule}
+          />
         </div>
 
         {/* Rainfall, Flood-Risk & Cyclone Station Telemetry */}
-        <div className="lg:col-span-5 border border-slate-800 rounded-xl bg-[#0A0F1A] overflow-hidden">
+        <div className="lg:col-span-5 border border-slate-800 rounded-xl bg-slate-900 overflow-hidden">
           <div className="px-4 py-2.5 border-b border-slate-800 flex items-center justify-between text-xs">
             <span className="font-semibold text-slate-100 inline-flex items-center gap-1.5">
               <CloudRain className="w-3.5 h-3.5 text-sky-400" aria-hidden="true" />
@@ -687,7 +581,7 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
       </div>
 
       {/* Forecast List */}
-      <div className="divide-y divide-slate-800 border border-slate-800 rounded-xl bg-[#0A0F1A] overflow-hidden">
+      <div className="divide-y divide-slate-800 border border-slate-800 rounded-xl bg-slate-900 overflow-hidden">
         {filtered.length === 0 ? (
           <div className="p-6 text-center space-y-2.5">
             <p className="text-xs text-slate-400">
@@ -700,7 +594,7 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
                 setCategory('All');
                 setRiskFilter('All');
               }}
-              className="min-h-[34px] px-3 py-1 text-xs font-medium rounded-lg border border-slate-700 bg-[#0D1422] text-slate-200 hover:bg-slate-800"
+              className="min-h-[34px] px-3 py-1 text-xs font-medium rounded-lg border border-slate-700 bg-slate-950 text-slate-200 hover:bg-slate-800"
             >
               Show All Warnings
             </button>
@@ -736,6 +630,32 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
                     <span className="text-slate-200">{f.metric}</span>
                     <span aria-hidden="true">·</span>
                     <span>{f.gridExposureMw} MW power load</span>
+                    {f.sourceName && f.sourceUrl && (
+                      <>
+                        <span aria-hidden="true">·</span>
+                        <a
+                          href={f.sourceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-teal-400 hover:text-teal-300 underline"
+                        >
+                          {f.sourceName}
+                        </a>
+                      </>
+                    )}
+                    {typeof f.lat === 'number' && typeof f.lng === 'number' && (
+                      <>
+                        <span aria-hidden="true">·</span>
+                        <a
+                          href={`https://zoom.earth/maps/satellite/#view=${f.lat.toFixed(2)},${f.lng.toFixed(2)},7z`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sky-400 hover:text-sky-300 underline"
+                        >
+                          Zoom Earth
+                        </a>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -758,7 +678,7 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
 
       {/* Historical Disaster Analysis (Citizen & Admin only) */}
       {showHistorical && (
-        <div className="border border-slate-800 rounded-xl bg-[#0A0F1A] overflow-hidden">
+        <div className="border border-slate-800 rounded-xl bg-slate-900 overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between text-xs">
             <span className="font-semibold text-slate-100 inline-flex items-center gap-1.5">
               <History className="w-3.5 h-3.5 text-blue-400" aria-hidden="true" />
@@ -766,7 +686,7 @@ export const DisasterModule: React.FC<DisasterModuleProps> = ({
             </span>
             <span className="text-[11px] font-mono text-slate-400">Sample multi-year archive</span>
           </div>
-          <div className="p-4 border-b border-slate-800 grid grid-cols-6 gap-2 items-end h-28 bg-[#080C15]">
+          <div className="p-4 border-b border-slate-800 grid grid-cols-6 gap-2 items-end h-28 bg-slate-950">
             {MONTHLY_TREND_SAMPLE.map((m) => (
               <div key={m.month} className="flex flex-col items-center gap-1 text-[10px] font-mono">
                 <span className="text-sky-400">{m.rainMm}mm</span>

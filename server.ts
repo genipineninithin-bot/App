@@ -1,8 +1,14 @@
 import 'dotenv/config';
-import express from 'express';
+import express, { NextFunction, Request, Response } from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai';
+import { PLATFORM_DATA_SOURCES, WEATHER_GRID_STATIONS } from './backend/datasets';
+import {
+  AirQualityCityReading,
+  fetchSupplementalLiveFeeds,
+  SpaceWeatherReading,
+} from './backend/liveFeeds';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,12 +32,87 @@ interface AssistantRequestBody {
   model?: string;
 }
 
+interface LiveDisasterItem {
+  id: string;
+  title: string;
+  category: 'Seismic' | 'Cyclone' | 'Wildfire' | 'Flood' | 'Grid Stress';
+  severity: 'Critical' | 'High' | 'Moderate' | 'Low';
+  region: string;
+  lat: number;
+  lng: number;
+  metric: string;
+  populationAtRisk: string;
+  summary: string;
+  timeLabel: string;
+  sourceName: 'CurrentDisaster.com' | 'GDACS (UN/EU)' | 'NASA EONET' | 'USGS Seismic';
+  sourceUrl: string;
+  affectedRadiusKm: number;
+  safeZoneRadiusKm: number;
+}
+
+interface EarthquakeSummary {
+  id: string;
+  magnitude: number;
+  place: string;
+  depthKm: number;
+  timeMs: number;
+  url?: string;
+}
+
+interface LiveDisastersPayload {
+  fetchedAt: string;
+  incidents: LiveDisasterItem[];
+  sources: {
+    currentDisaster: 'live' | 'unavailable';
+    gdacs: 'live' | 'unavailable';
+    nasaEonet: 'live' | 'unavailable';
+    usgs: 'live' | 'unavailable';
+  };
+}
+
+interface LiveDisastersInternal extends LiveDisastersPayload {
+  earthquakes: EarthquakeSummary[];
+}
+
+interface RealtimeFeedPayload {
+  fetchedAt: string;
+  earthquakes: EarthquakeSummary[];
+  liveDisasters: LiveDisasterItem[];
+  cyberAdvisories: Array<{
+    cveId: string;
+    vendor: string;
+    product: string;
+    title: string;
+    dateAdded: string;
+    knownRansomware: string;
+  }>;
+  weather: Array<{
+    city: string;
+    temperatureC: number;
+    windKmh: number;
+    precipitationMm: number;
+    condition: string;
+  }>;
+  spaceWeather: SpaceWeatherReading | null;
+  airQuality: AirQualityCityReading[];
+  sources: {
+    usgs: 'live' | 'unavailable';
+    cisa: 'live' | 'unavailable';
+    weather: 'live' | 'unavailable';
+    currentDisaster: 'live' | 'unavailable';
+    gdacs: 'live' | 'unavailable';
+    nasaEonet: 'live' | 'unavailable';
+    noaaSpaceWeather: 'live' | 'unavailable';
+    openMeteoAqi: 'live' | 'unavailable';
+  };
+}
+
 const NEXORA_TRAINING_PLAYBOOK = `
 NEXORA AI PLATFORM TRAINING & OPERATIONAL KNOWLEDGE:
-- Platform Identity: NEXORA AI ("Predict. Protect. Respond. Empower.") — an integrated AI disaster prediction, emergency response, 3D geospatial mapping, and cybersecurity intelligence platform.
+- Platform Identity: NEXORA AI ("Predict. Protect. Respond. Empower.") — an integrated AI disaster prediction, emergency response, Google Maps situational awareness, and cybersecurity intelligence platform.
 - Module Directory (guide users to exact module when helpful):
-  * Module 01 (Command Center & 3D Globe): Live disaster/cyber overview, 3D tactical globe showing disaster risk zones, alerts, and incident pins.
-  * Module 02 (Disaster Prediction & Monitoring): Environmental risk scoring (Flood, Cyclone, Wildfire, Seismic, Grid Stress) + live USGS M4.5+ seismic feed sync.
+  * Module 01 (Command Center & Google Maps): Live disaster/cyber overview, interactive Google Maps showing disaster risk zones, alerts, hospitals, shelters, and incident pins.
+  * Module 02 (Disaster Prediction & Monitoring): Environmental risk scoring (Flood, Cyclone, Wildfire, Seismic, Grid Stress) + live multi-source disaster sync.
   * Module 03 (Cybersecurity & Threat Detection): Passive phishing URL/SMS/log analyzer, MITRE ATT&CK telemetry, containment queue.
   * Module 04 (NEXORA AI Assistant): Multilingual preparedness, first-aid, triage, cyber defense, safety checklists, and custom SOP training knowledge base.
   * Module 05 (Emergency Response & Incident Ops): Citizen SOS reporting, pre/post imagery damage assessment, START patient triage, and rescue unit dispatch.
@@ -50,6 +131,9 @@ NEXORA AI PLATFORM TRAINING & OPERATIONAL KNOWLEDGE:
 
 const DEFAULT_GEMINI_MODEL = 'gemini-4-hydrogen';
 const ALLOWED_GEMINI_MODELS = new Set(['gemini-4-hydrogen', 'gemini-3.1-flash-lite']);
+const FRESH_CACHE_MS = 60_000;
+const STALE_CACHE_MS = 10 * 60_000;
+const EXTERNAL_FETCH_TIMEOUT_MS = 4500;
 
 function resolveGeminiModel(requested?: string): string {
   if (typeof requested === 'string' && ALLOWED_GEMINI_MODELS.has(requested.trim())) {
@@ -84,29 +168,42 @@ function getGeminiClient(): GoogleGenAI {
 
 function isTransientCapacityError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err || '');
-  return /503|UNAVAILABLE|high demand|RESOURCE_EXHAUSTED|429|overloaded|ETIMEDOUT|ECONNRESET|fetch failed/i.test(msg);
+  return /503|UNAVAILABLE|high demand|RESOURCE_EXHAUSTED|429|overloaded|ETIMEDOUT|ECONNRESET|fetch failed/i.test(
+    msg
+  );
 }
 
 function isAuthOrKeyError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err || '');
-  return /GEMINI_API_KEY|API key not valid|API_KEY_INVALID|API_KEY_EXPIRED|PERMISSION_DENIED|UNAUTHENTICATED|API key expired/i.test(msg);
+  return /GEMINI_API_KEY|API key not valid|API_KEY_INVALID|API_KEY_EXPIRED|PERMISSION_DENIED|UNAUTHENTICATED|API key expired/i.test(
+    msg
+  );
 }
 
-function formatGeminiError(err: unknown, fallbackMsg: string): { statusCode: number; message: string } {
+function formatGeminiError(
+  err: unknown,
+  fallbackMsg: string
+): { statusCode: number; message: string } {
   const raw = err instanceof Error ? err.message : String(err || fallbackMsg);
   if (raw.includes('GEMINI_API_KEY')) {
     return { statusCode: 503, message: raw };
   }
   let cleanMessage = raw;
   try {
-    const parsed = JSON.parse(raw) as { error?: { message?: string; code?: number; status?: string } };
+    const parsed = JSON.parse(raw) as {
+      error?: { message?: string; code?: number; status?: string };
+    };
     if (parsed?.error?.message) {
       cleanMessage = parsed.error.message;
     }
   } catch {
     // keep raw message
   }
-  if (/API key not valid|API_KEY_INVALID|API_KEY_EXPIRED|PERMISSION_DENIED|UNAUTHENTICATED|API key expired/i.test(cleanMessage)) {
+  if (
+    /API key not valid|API_KEY_INVALID|API_KEY_EXPIRED|PERMISSION_DENIED|UNAUTHENTICATED|API key expired/i.test(
+      cleanMessage
+    )
+  ) {
     return {
       statusCode: 400,
       message:
@@ -140,7 +237,7 @@ async function generateWithFallback(
     });
   } catch (err) {
     if (primaryModel !== 'gemini-3.1-flash-lite' && !isAuthOrKeyError(err)) {
-      await new Promise((r) => setTimeout(r, 200));
+      await new Promise((r) => setTimeout(r, 150));
       return await ai.models.generateContent({
         model: 'gemini-3.1-flash-lite',
         ...applyFastModelConfig('gemini-3.1-flash-lite', params),
@@ -163,7 +260,7 @@ async function generateStreamWithFallback(
     });
   } catch (err) {
     if (primaryModel !== 'gemini-3.1-flash-lite' && !isAuthOrKeyError(err)) {
-      await new Promise((r) => setTimeout(r, 200));
+      await new Promise((r) => setTimeout(r, 150));
       return await ai.models.generateContentStream({
         model: 'gemini-3.1-flash-lite',
         ...applyFastModelConfig('gemini-3.1-flash-lite', params),
@@ -216,13 +313,13 @@ function buildAssistantRequestPayload(body: AssistantRequestBody) {
     : 'Keep answers clear, direct, and easy to read. Use short paragraphs or bullet steps.';
 
   const systemParts = [
-    `You are NEXORA AI Helper — a fast, friendly, all-purpose AI assistant inside NEXORA AI.`,
-    `IMPORTANT: Answer ALL kinds of questions the user asks — including general knowledge, math, science, coding, writing, translations, daily help, study questions, weather, health/first-aid, cybersecurity/scam checks, and disaster/emergency guidance. Never refuse a normal question just because it is not about disasters.`,
+    'You are NEXORA AI Helper — a fast, friendly, all-purpose AI assistant inside NEXORA AI.',
+    'IMPORTANT: Answer ALL kinds of questions the user asks — including general knowledge, math, science, coding, writing, translations, daily help, study questions, weather, health/first-aid, cybersecurity/scam checks, and disaster/emergency guidance. Never refuse a normal question just because it is not about disasters.',
     `Write in ${language} unless the user asks you to translate or reply in a different language.`,
     roleDirective,
     emergencyDirective,
-    `For live medical emergencies advise dialing 112/911 (note guidance is not a medical diagnosis). Never invent fake official government alerts.`,
-    `Only bring up NEXORA live alerts/incidents/cyber stats when the user asks about them or when relevant to safety.`,
+    'For live medical emergencies advise dialing 112/911 (note guidance is not a medical diagnosis). Never invent fake official government alerts.',
+    'Only bring up NEXORA live alerts/incidents/cyber stats when the user asks about them or when relevant to safety.',
     NEXORA_TRAINING_PLAYBOOK,
     knowledgeBase ? `Custom Safety Rules / Training:\n${knowledgeBase}` : '',
     contextSummary ? `Live Platform Context:\n${contextSummary}` : '',
@@ -240,12 +337,717 @@ function buildAssistantRequestPayload(body: AssistantRequestBody) {
   };
 }
 
+function decodeWeatherCode(code: number): string {
+  if (code === 0) return 'Clear';
+  if (code <= 3) return 'Partly Cloudy';
+  if (code <= 48) return 'Fog / Haze';
+  if (code <= 67) return 'Rain';
+  if (code <= 77) return 'Snow';
+  if (code <= 82) return 'Rain Showers';
+  if (code >= 95) return 'Thunderstorm';
+  return 'Cloudy';
+}
+
+async function fetchJsonWithTimeout<T>(
+  url: string,
+  timeoutMs = EXTERNAL_FETCH_TIMEOUT_MS
+): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const resp = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'NEXORA-AI-LiveFeed/1.0', Accept: 'application/json' },
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return (await resp.json()) as T;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchTextWithTimeout(
+  url: string,
+  timeoutMs = EXTERNAL_FETCH_TIMEOUT_MS
+): Promise<string> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const resp = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NEXORA-AI/1.0)' },
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return await resp.text();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function mapExternalCategory(raw: string): LiveDisasterItem['category'] {
+  const t = raw.toLowerCase();
+  if (t.includes('fire') || t.includes('wf') || t.includes('wildfire')) return 'Wildfire';
+  if (
+    t.includes('cyclone') ||
+    t.includes('storm') ||
+    t.includes('tc') ||
+    t.includes('typhoon') ||
+    t.includes('hurricane')
+  ) {
+    return 'Cyclone';
+  }
+  if (t.includes('flood') || t.includes('fl') || t.includes('tsunami')) return 'Flood';
+  if (
+    t.includes('eq') ||
+    t.includes('quake') ||
+    t.includes('seismic') ||
+    t.includes('volcano') ||
+    t.includes('vo')
+  ) {
+    return 'Seismic';
+  }
+  return 'Grid Stress';
+}
+
+function mapExternalSeverity(raw: string): LiveDisasterItem['severity'] {
+  const s = raw.toLowerCase();
+  if (s === 'critical' || s === 'red') return 'Critical';
+  if (s === 'high' || s === 'orange') return 'High';
+  if (s === 'moderate' || s === 'medium') return 'Moderate';
+  return 'Low';
+}
+
+function parseCurrentDisasterHtml(html: string): LiveDisasterItem[] {
+  const startIdx = html.indexOf('STATIC_EVENTS');
+  if (startIdx < 0) return [];
+  const bracketStart = html.indexOf('[', startIdx);
+  const bracketEnd = html.indexOf('];', bracketStart);
+  if (bracketStart < 0 || bracketEnd < 0) return [];
+  const block = html.slice(bracketStart, bracketEnd + 1);
+  const items: LiveDisasterItem[] = [];
+  const objRegex = /\{[^{}]+\}/g;
+  let match: RegExpExecArray | null;
+  while ((match = objRegex.exec(block)) !== null) {
+    const rawObj = match[0];
+    const getStr = (key: string) => {
+      const m = rawObj.match(new RegExp(`${key}\\s*:\\s*['"]([^'"]*)['"]`));
+      return m ? m[1] : '';
+    };
+    const getNum = (key: string) => {
+      const m = rawObj.match(new RegExp(`${key}\\s*:\\s*(-?\\d+(?:\\.\\d+)?)`));
+      return m ? Number(m[1]) : NaN;
+    };
+    const id = getStr('id');
+    const name = getStr('name');
+    const type = getStr('type');
+    const lat = getNum('lat');
+    const lng = getNum('lng');
+    const severity = getStr('severity');
+    const time = getStr('time') || 'Ongoing';
+    const region = getStr('region') || 'Monitored Region';
+    const affected = getStr('affected') || 'Assessing';
+    const criticality = getNum('criticality');
+    if (!id || !name || !Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+    const sev = mapExternalSeverity(severity);
+    const cat = mapExternalCategory(type || name);
+    const baseRadius =
+      cat === 'Cyclone' ? 85 : cat === 'Seismic' ? 45 : cat === 'Wildfire' ? 22 : cat === 'Flood' ? 25 : 15;
+    const mult = sev === 'Critical' ? 1.5 : sev === 'High' ? 1.2 : sev === 'Moderate' ? 0.9 : 0.65;
+    const affectedRadiusKm = Math.round(baseRadius * mult);
+    items.push({
+      id: `CD-${id.toUpperCase()}`,
+      title: name,
+      category: cat,
+      severity: sev,
+      region,
+      lat,
+      lng,
+      metric: `${type ? type.toUpperCase() : 'EVENT'} · Index ${Number.isFinite(criticality) ? criticality : 70}/100`,
+      populationAtRisk: affected,
+      summary: `Tracked via CurrentDisaster.com (${time}) in ${region}.`,
+      timeLabel: time,
+      sourceName: 'CurrentDisaster.com',
+      sourceUrl: 'https://currentdisaster.com/',
+      affectedRadiusKm,
+      safeZoneRadiusKm: Math.round(affectedRadiusKm * 1.9),
+    });
+  }
+  return items;
+}
+
+function estimateGdacsRadiusKm(
+  eventType: string,
+  alertLevel: string,
+  severityVal?: number
+): { affectedRadiusKm: number; safeZoneRadiusKm: number } {
+  const et = eventType.toUpperCase();
+  const levelMult = alertLevel === 'Red' ? 1.5 : alertLevel === 'Orange' ? 1.2 : 0.85;
+  const val = typeof severityVal === 'number' && Number.isFinite(severityVal) ? severityVal : 0;
+
+  let affected = 20;
+  if (et === 'WF') {
+    // Burned area in hectares -> equivalent radius + smoke/ember exclusion buffer
+    const burnedKm = val > 0 ? Math.sqrt((val / 100) / Math.PI) : 4;
+    affected = Math.max(8, Math.min(65, Math.round((burnedKm * 2.5 + 8) * levelMult)));
+  } else if (et === 'EQ') {
+    // Seismic felt / structural shaking radius by magnitude
+    const mag = val >= 3 ? val : 4.8;
+    affected = Math.max(18, Math.min(180, Math.round(Math.pow(10, 0.42 * mag - 0.65))));
+  } else if (et === 'TC') {
+    // Tropical cyclone gale wind field radius
+    const wind = val > 30 ? val : 85;
+    affected = Math.max(45, Math.min(190, Math.round((wind * 0.95) * levelMult)));
+  } else if (et === 'FL') {
+    affected = Math.round(24 * levelMult);
+  } else if (et === 'VO') {
+    affected = Math.round(35 * levelMult);
+  } else {
+    affected = Math.round(25 * levelMult);
+  }
+
+  return {
+    affectedRadiusKm: affected,
+    safeZoneRadiusKm: Math.round(affected * 1.85),
+  };
+}
+
 async function startServer() {
   const app = express();
+  app.disable('x-powered-by');
   app.use(express.json({ limit: '10mb' }));
 
+  // Basic security headers for all API endpoints
+  app.use('/api', (_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    next();
+  });
+
   app.get('/api/health', (_req, res) => {
-    res.json({ status: 'ok', service: 'nexora-ai-server' });
+    res.json({
+      status: 'ok',
+      service: 'nexora-ai-server',
+      uptimeSec: Math.round(process.uptime()),
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  app.get('/api/maps/config', (_req, res) => {
+    const raw =
+      process.env.VITE_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY || '';
+    const cleaned = raw.trim().replace(/^["']|["']$/g, '');
+    const apiKey = /^MY_GOOGLE_MAPS/i.test(cleaned) ? '' : cleaned;
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ apiKey });
+  });
+
+  // Stale-while-revalidate caches + in-flight request deduplication
+  let disastersCache: { freshUntil: number; staleUntil: number; data: LiveDisastersInternal } | null =
+    null;
+  let inFlightDisasters: Promise<LiveDisastersInternal> | null = null;
+
+  let realtimeCache: { freshUntil: number; staleUntil: number; data: RealtimeFeedPayload } | null =
+    null;
+  let inFlightRealtime: Promise<RealtimeFeedPayload> | null = null;
+
+  async function refreshLiveDisasters(): Promise<LiveDisastersInternal> {
+    if (inFlightDisasters) return inFlightDisasters;
+
+    inFlightDisasters = (async () => {
+      const now = Date.now();
+      const [cdRes, gdacsRes, eonetRes, usgsRes] = await Promise.allSettled([
+        fetchTextWithTimeout('https://currentdisaster.com/'),
+        fetchJsonWithTimeout<{
+          features?: Array<{
+            geometry?: { coordinates?: number[] };
+            properties?: {
+              eventtype?: string;
+              eventid?: number;
+              name?: string;
+              description?: string;
+              htmldescription?: string;
+              alertlevel?: string;
+              country?: string;
+              fromdate?: string;
+              severitydata?: {
+                severity?: number;
+                severitytext?: string;
+                severityunit?: string;
+              };
+              url?: { report?: string };
+            };
+          }>;
+        }>(
+          'https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH?eventlist=EQ;TC;FL;VO;WF;DR&alertlevel=Green;Orange;Red'
+        ),
+        fetchJsonWithTimeout<{
+          events?: Array<{
+            id?: string;
+            title?: string;
+            categories?: Array<{ id?: string; title?: string }>;
+            sources?: Array<{ id?: string; url?: string }>;
+            geometry?: Array<{
+              magnitudeValue?: number;
+              magnitudeUnit?: string;
+              date?: string;
+              coordinates?: number[];
+            }>;
+          }>;
+        }>('https://eonet.gsfc.nasa.gov/api/v3/events?status=open&limit=10'),
+        fetchJsonWithTimeout<{
+          features?: Array<{
+            id?: string;
+            properties?: { mag?: number; place?: string; time?: number; url?: string };
+            geometry?: { coordinates?: number[] };
+          }>;
+        }>('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson'),
+      ]);
+
+      const combined: LiveDisasterItem[] = [];
+      const earthquakes: EarthquakeSummary[] = [];
+
+      // 1. GDACS (https://www.gdacs.org — Live Fires, Earthquakes, Cyclones, Floods, Volcanoes)
+      if (gdacsRes.status === 'fulfilled' && Array.isArray(gdacsRes.value?.features)) {
+        const alertRank = (lvl?: string) =>
+          lvl === 'Red' ? 3 : lvl === 'Orange' ? 2 : 1;
+        const sortedGdacs = [...gdacsRes.value.features].sort(
+          (a, b) => alertRank(b.properties?.alertlevel) - alertRank(a.properties?.alertlevel)
+        );
+
+        // Select a balanced multi-hazard mix from GDACS so fires, quakes, floods, cyclones & volcanoes are all live
+        const typeQuotas: Record<string, number> = { TC: 3, FL: 3, VO: 2, EQ: 4, WF: 4, DR: 1 };
+        const typeCounts: Record<string, number> = {};
+        const selectedGdacs: typeof sortedGdacs = [];
+
+        for (const f of sortedGdacs) {
+          const et = String(f.properties?.eventtype || 'EQ').toUpperCase();
+          const quota = typeQuotas[et] ?? 2;
+          const used = typeCounts[et] ?? 0;
+          if (used >= quota) continue;
+          typeCounts[et] = used + 1;
+          selectedGdacs.push(f);
+          if (selectedGdacs.length >= 15) break;
+        }
+
+        selectedGdacs.forEach((f, idx) => {
+          const coords = f.geometry?.coordinates;
+          const p = f.properties;
+          if (!p || !Array.isArray(coords) || coords.length < 2) return;
+          const lng = Number(coords[0]);
+          const lat = Number(coords[1]);
+          if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+          const alertLevel = String(p.alertlevel || 'Green');
+          const eventType = String(p.eventtype || 'EQ').toUpperCase();
+          const country = String(p.country || 'International Zone').trim() || 'International Zone';
+          const sevVal = p.severitydata?.severity;
+          const sevText = p.severitydata?.severitytext?.trim();
+          const radii = estimateGdacsRadiusKm(eventType, alertLevel, sevVal);
+
+          combined.push({
+            id: `GDACS-${eventType}-${p.eventid ?? idx}`,
+            title: String(p.name || p.description || `${eventType} Disaster Alert`),
+            category: mapExternalCategory(eventType),
+            severity: mapExternalSeverity(alertLevel),
+            region: country,
+            lat,
+            lng,
+            metric: sevText
+              ? `GDACS ${alertLevel} · ${sevText}`
+              : `GDACS ${alertLevel} Alert · ${eventType}`,
+            populationAtRisk:
+              alertLevel === 'Red'
+                ? 'High Exposure'
+                : alertLevel === 'Orange'
+                ? 'Elevated Risk'
+                : 'Monitoring',
+            summary: String(
+              p.htmldescription ||
+                sevText ||
+                p.description ||
+                `Live GDACS ${alertLevel} alert in ${country}.`
+            )
+              .replace(/<[^>]+>/g, '')
+              .trim(),
+            timeLabel: p.fromdate ? String(p.fromdate).slice(0, 10) : 'Live',
+            sourceName: 'GDACS (UN/EU)',
+            sourceUrl: p.url?.report || 'https://www.gdacs.org/',
+            affectedRadiusKm: radii.affectedRadiusKm,
+            safeZoneRadiusKm: radii.safeZoneRadiusKm,
+          });
+        });
+      }
+
+      // 2. NASA EONET (Real-Time Cyclones, Wildfires, Floods, Volcanoes)
+      if (eonetRes.status === 'fulfilled' && Array.isArray(eonetRes.value?.events)) {
+        eonetRes.value.events.slice(0, 5).forEach((ev, idx) => {
+          const geom =
+            Array.isArray(ev.geometry) && ev.geometry.length > 0
+              ? ev.geometry[ev.geometry.length - 1]
+              : null;
+          const coords = geom?.coordinates;
+          if (!Array.isArray(coords) || coords.length < 2) return;
+          const lng = Number(coords[0]);
+          const lat = Number(coords[1]);
+          if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+          const catTitle = ev.categories?.[0]?.title || 'Natural Event';
+          const category = mapExternalCategory(catTitle);
+          const magStr =
+            typeof geom?.magnitudeValue === 'number'
+              ? `${geom.magnitudeValue} ${geom.magnitudeUnit || ''}`.trim()
+              : catTitle;
+          const affectedRadiusKm =
+            category === 'Cyclone' ? 95 : category === 'Wildfire' ? 24 : category === 'Flood' ? 25 : 30;
+          combined.push({
+            id: `EONET-${String(ev.id || idx).replace(/[^A-Za-z0-9_-]/g, '')}`,
+            title: String(ev.title || 'Active Natural Event').replace(/&amp;/g, '&'),
+            category,
+            severity: category === 'Cyclone' ? 'High' : 'Moderate',
+            region:
+              String(ev.title || 'NASA Monitored Area')
+                .split(',')
+                .slice(-2)
+                .join(',')
+                .trim() || 'Monitored Area',
+            lat,
+            lng,
+            metric: `NASA EONET · ${magStr}`,
+            populationAtRisk: 'Active Tracking',
+            summary: `Live open natural event tracked by NASA EONET (${catTitle}).`,
+            timeLabel: geom?.date ? String(geom.date).slice(0, 10) : 'Open',
+            sourceName: 'NASA EONET',
+            sourceUrl: ev.sources?.[0]?.url || 'https://eonet.gsfc.nasa.gov/',
+            affectedRadiusKm,
+            safeZoneRadiusKm: Math.round(affectedRadiusKm * 1.85),
+          });
+        });
+      }
+
+      // 3. USGS M4.5+ Real-Time Earthquakes (Fetched once and shared with /api/realtime/feed)
+      if (usgsRes.status === 'fulfilled' && Array.isArray(usgsRes.value?.features)) {
+        usgsRes.value.features.slice(0, 5).forEach((f, idx) => {
+          const coords = f.geometry?.coordinates;
+          if (!Array.isArray(coords) || coords.length < 2) return;
+          const lng = Number(coords[0]);
+          const lat = Number(coords[1]);
+          if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+          const mag = Number(f.properties?.mag ?? 4.5);
+          const depth = Math.round(Number(coords[2] ?? 10));
+          const place = String(f.properties?.place || 'Offshore Seismic Zone');
+          const url = typeof f.properties?.url === 'string' ? f.properties.url : undefined;
+          const affectedRadiusKm = Math.max(20, Math.min(180, Math.round(Math.pow(10, 0.42 * mag - 0.65))));
+
+          earthquakes.push({
+            id: String(f.id || `eq-${idx}`),
+            magnitude: Number(mag.toFixed(1)),
+            place,
+            depthKm: depth,
+            timeMs: Number(f.properties?.time ?? now),
+            url,
+          });
+
+          combined.push({
+            id: `USGS-${String(f.id || idx).slice(0, 8).toUpperCase()}`,
+            title: `M ${mag.toFixed(1)} Earthquake — ${place}`,
+            category: 'Seismic',
+            severity:
+              mag >= 6.2 ? 'Critical' : mag >= 5.5 ? 'High' : mag >= 5.0 ? 'Moderate' : 'Low',
+            region: place,
+            lat,
+            lng,
+            metric: `M ${mag.toFixed(1)} · ${depth} km depth`,
+            populationAtRisk: mag >= 6.0 ? '250,000+' : 'Regional Monitoring',
+            summary: 'Live seismic event reported by USGS Earthquake Hazards Program.',
+            timeLabel: 'Past 24h',
+            sourceName: 'USGS Seismic',
+            sourceUrl: url || 'https://earthquake.usgs.gov/',
+            affectedRadiusKm,
+            safeZoneRadiusKm: Math.round(affectedRadiusKm * 1.85),
+          });
+        });
+      }
+
+      // 4. CurrentDisaster.com Events
+      let cdStatus: 'live' | 'unavailable' = 'unavailable';
+      if (cdRes.status === 'fulfilled') {
+        const cdItems = parseCurrentDisasterHtml(cdRes.value);
+        if (cdItems.length > 0) {
+          cdStatus = 'live';
+          combined.push(...cdItems.slice(0, 5));
+        }
+      }
+
+      const data: LiveDisastersInternal = {
+        fetchedAt: new Date(now).toISOString(),
+        incidents: combined,
+        earthquakes,
+        sources: {
+          currentDisaster: cdStatus,
+          gdacs: gdacsRes.status === 'fulfilled' ? 'live' : 'unavailable',
+          nasaEonet: eonetRes.status === 'fulfilled' ? 'live' : 'unavailable',
+          usgs: usgsRes.status === 'fulfilled' ? 'live' : 'unavailable',
+        },
+      };
+
+      disastersCache = {
+        freshUntil: now + FRESH_CACHE_MS,
+        staleUntil: now + STALE_CACHE_MS,
+        data,
+      };
+      return data;
+    })().finally(() => {
+      inFlightDisasters = null;
+    });
+
+    return inFlightDisasters;
+  }
+
+  async function getLiveDisasters(forceRefresh = false): Promise<LiveDisastersInternal> {
+    const now = Date.now();
+    if (!forceRefresh && disastersCache) {
+      if (disastersCache.freshUntil > now) return disastersCache.data;
+      if (disastersCache.staleUntil > now) {
+        void refreshLiveDisasters().catch(() => {});
+        return disastersCache.data;
+      }
+    }
+    return refreshLiveDisasters();
+  }
+
+  app.get('/api/disasters/live', async (req, res) => {
+    const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true';
+    try {
+      const data = await getLiveDisasters(forceRefresh);
+      const payload: LiveDisastersPayload = {
+        fetchedAt: data.fetchedAt,
+        incidents: data.incidents,
+        sources: data.sources,
+      };
+      res.json(payload);
+    } catch {
+      res.status(502).json({ error: 'Unable to fetch live disaster feeds right now.' });
+    }
+  });
+
+  async function refreshRealtimeFeed(forceDisasters = false): Promise<RealtimeFeedPayload> {
+    if (inFlightRealtime && !forceDisasters) return inFlightRealtime;
+
+    inFlightRealtime = (async () => {
+      const now = Date.now();
+      const cities = [
+        { city: 'Tokyo', lat: 35.68, lon: 139.77 },
+        { city: 'Mumbai', lat: 19.08, lon: 72.88 },
+        { city: 'London', lat: 51.51, lon: -0.13 },
+        { city: 'New York', lat: 40.71, lon: -74.01 },
+      ];
+      const meteoUrl = `https://api.open-meteo.com/v1/forecast?latitude=${cities
+        .map((c) => c.lat)
+        .join(',')}&longitude=${cities
+        .map((c) => c.lon)
+        .join(',')}&current=temperature_2m,wind_speed_10m,precipitation,weather_code`;
+
+      const [disastersResult, cisaResult, meteoResult, supplementalResult] = await Promise.allSettled([
+        getLiveDisasters(forceDisasters),
+        fetchJsonWithTimeout<{
+          vulnerabilities?: Array<{
+            cveID?: string;
+            vendorProject?: string;
+            product?: string;
+            vulnerabilityName?: string;
+            dateAdded?: string;
+            knownRansomwareCampaignUse?: string;
+          }>;
+        }>('https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json'),
+        fetchJsonWithTimeout<
+          Array<{
+            current?: {
+              temperature_2m?: number;
+              wind_speed_10m?: number;
+              precipitation?: number;
+              weather_code?: number;
+            };
+          }>
+        >(meteoUrl),
+        fetchSupplementalLiveFeeds(forceDisasters),
+      ]);
+
+      const disastersData = disastersResult.status === 'fulfilled' ? disastersResult.value : null;
+      const supplemental = supplementalResult.status === 'fulfilled' ? supplementalResult.value : null;
+
+      const cyberAdvisories: RealtimeFeedPayload['cyberAdvisories'] =
+        cisaResult.status === 'fulfilled' && Array.isArray(cisaResult.value?.vulnerabilities)
+          ? [...cisaResult.value.vulnerabilities]
+              .sort((a, b) => String(b.dateAdded || '').localeCompare(String(a.dateAdded || '')))
+              .slice(0, 5)
+              .map((v, idx) => ({
+                cveId: String(v.cveID || `CVE-KEV-${idx}`),
+                vendor: String(v.vendorProject || 'Vendor'),
+                product: String(v.product || 'System'),
+                title: String(v.vulnerabilityName || 'Known Exploited Vulnerability'),
+                dateAdded: String(v.dateAdded || ''),
+                knownRansomware: String(v.knownRansomwareCampaignUse || 'Unknown'),
+              }))
+          : [];
+
+      const weather: RealtimeFeedPayload['weather'] =
+        meteoResult.status === 'fulfilled' && Array.isArray(meteoResult.value)
+          ? cities.map((c, idx) => {
+              const cur = meteoResult.value[idx]?.current;
+              return {
+                city: c.city,
+                temperatureC: Math.round(Number(cur?.temperature_2m ?? 0)),
+                windKmh: Math.round(Number(cur?.wind_speed_10m ?? 0)),
+                precipitationMm: Number(Number(cur?.precipitation ?? 0).toFixed(1)),
+                condition: decodeWeatherCode(Number(cur?.weather_code ?? 0)),
+              };
+            })
+          : [];
+
+      const data: RealtimeFeedPayload = {
+        fetchedAt: new Date(now).toISOString(),
+        earthquakes: disastersData?.earthquakes ?? [],
+        liveDisasters: disastersData?.incidents.slice(0, 10) ?? [],
+        cyberAdvisories,
+        weather,
+        spaceWeather: supplemental?.spaceWeather ?? null,
+        airQuality: supplemental?.airQuality ?? [],
+        sources: {
+          usgs: disastersData?.sources.usgs ?? 'unavailable',
+          cisa: cisaResult.status === 'fulfilled' ? 'live' : 'unavailable',
+          weather: meteoResult.status === 'fulfilled' ? 'live' : 'unavailable',
+          currentDisaster: disastersData?.sources.currentDisaster ?? 'unavailable',
+          gdacs: disastersData?.sources.gdacs ?? 'unavailable',
+          nasaEonet: disastersData?.sources.nasaEonet ?? 'unavailable',
+          noaaSpaceWeather: supplemental?.sources.noaaSpaceWeather ?? 'unavailable',
+          openMeteoAqi: supplemental?.sources.openMeteoAqi ?? 'unavailable',
+        },
+      };
+
+      realtimeCache = {
+        freshUntil: now + FRESH_CACHE_MS,
+        staleUntil: now + STALE_CACHE_MS,
+        data,
+      };
+      return data;
+    })().finally(() => {
+      inFlightRealtime = null;
+    });
+
+    return inFlightRealtime;
+  }
+
+  app.get('/api/realtime/feed', async (req, res) => {
+    const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true';
+    const now = Date.now();
+    try {
+      if (!forceRefresh && realtimeCache) {
+        if (realtimeCache.freshUntil > now) {
+          res.json(realtimeCache.data);
+          return;
+        }
+        if (realtimeCache.staleUntil > now) {
+          void refreshRealtimeFeed(false).catch(() => {});
+          res.json(realtimeCache.data);
+          return;
+        }
+      }
+      const payload = await refreshRealtimeFeed(forceRefresh);
+      res.json(payload);
+    } catch {
+      res.status(502).json({ error: 'Unable to fetch real-time intelligence feeds right now.' });
+    }
+  });
+
+  app.get('/api/system/architecture', (_req, res) => {
+    res.json({
+      frontendFolder: 'frontend/ & src/',
+      backendFolder: 'backend/ & server.ts',
+      database: {
+        engine: 'Firebase Cloud Firestore + Firebase Authentication',
+        databaseId: 'ai-studio-aegisgrid-1b1c18df-9811-4ea4-9c98-dde59b75bbeb',
+        collections: [
+          'users',
+          'admins',
+          'disasters',
+          'incidents',
+          'relief_resources',
+          'alerts',
+          'threats',
+          'ai_knowledge',
+          'system_config',
+          'audit_logs',
+        ],
+      },
+      dataSources: PLATFORM_DATA_SOURCES,
+    });
+  });
+
+  // Live regional meteorological grid for Satellite & Radar Forecast Map overlays
+  interface WeatherGridStation {
+    id: string;
+    name: string;
+    lat: number;
+    lng: number;
+    tempC: number;
+    humidityPct: number;
+    pressureHpa: number;
+    windKmh: number;
+    windDeg: number;
+    precipMm: number;
+  }
+
+  let weatherGridCache: { expiresAt: number; fetchedAt: string; stations: WeatherGridStation[] } | null = null;
+
+  app.get('/api/weather/grid', async (_req, res) => {
+    const now = Date.now();
+    if (weatherGridCache && weatherGridCache.expiresAt > now) {
+      res.json({
+        fetchedAt: weatherGridCache.fetchedAt,
+        stations: weatherGridCache.stations,
+      });
+      return;
+    }
+
+    try {
+      const lats = WEATHER_GRID_STATIONS.map((s) => s.lat).join(',');
+      const lngs = WEATHER_GRID_STATIONS.map((s) => s.lng).join(',');
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lngs}&current=temperature_2m,relative_humidity_2m,pressure_msl,wind_speed_10m,wind_direction_10m,precipitation`;
+      const raw = await fetchJsonWithTimeout<
+        Array<{
+          current?: {
+            temperature_2m?: number;
+            relative_humidity_2m?: number;
+            pressure_msl?: number;
+            wind_speed_10m?: number;
+            wind_direction_10m?: number;
+            precipitation?: number;
+          };
+        }>
+      >(url, 4500);
+
+      const list = Array.isArray(raw) ? raw : [raw];
+      const stations: WeatherGridStation[] = WEATHER_GRID_STATIONS.map((meta, idx) => {
+        const cur = list[idx]?.current;
+        return {
+          ...meta,
+          tempC: Math.round((cur?.temperature_2m ?? 28) * 10) / 10,
+          humidityPct: Math.round(cur?.relative_humidity_2m ?? 65),
+          pressureHpa: Math.round((cur?.pressure_msl ?? 1012) * 10) / 10,
+          windKmh: Math.round((cur?.wind_speed_10m ?? 14) * 10) / 10,
+          windDeg: Math.round(cur?.wind_direction_10m ?? 90),
+          precipMm: Math.round((cur?.precipitation ?? 0) * 10) / 10,
+        };
+      });
+
+      const fetchedAt = new Date(now).toISOString();
+      weatherGridCache = { expiresAt: now + 5 * 60_000, fetchedAt, stations };
+      res.json({ fetchedAt, stations });
+    } catch {
+      if (weatherGridCache) {
+        res.json({ fetchedAt: weatherGridCache.fetchedAt, stations: weatherGridCache.stations });
+        return;
+      }
+      res.status(502).json({ error: 'Live meteorological grid temporarily unavailable.' });
+    }
   });
 
   app.post('/api/disaster/predict', (req, res) => {
@@ -258,8 +1060,8 @@ async function startServer() {
       windKmh?: number;
     };
 
-    const disasterType = String(body.disasterType || 'Flood').trim();
-    const location = String(body.location || 'Regional Sector').trim();
+    const disasterType = String(body.disasterType || 'Flood').trim().slice(0, 40);
+    const location = String(body.location || 'Regional Sector').trim().slice(0, 120);
     const rainfall = Math.max(0, parseFiniteNum(body.rainfallMm, 0));
     const temperature = parseFiniteNum(body.temperatureC, 26);
     const humidity = Math.min(100, Math.max(0, parseFiniteNum(body.humidityPct, 55)));
@@ -303,7 +1105,7 @@ async function startServer() {
     const riskScore = Math.min(98, Math.max(8, Math.round(score)));
     const riskLevel: 'Low' | 'Medium' | 'High' =
       riskScore >= 70 ? 'High' : riskScore >= 42 ? 'Medium' : 'Low';
-    const confidencePct = Math.min(94, Math.max(72, Math.round(78 + (factors.length * 4))));
+    const confidencePct = Math.min(94, Math.max(72, Math.round(78 + factors.length * 4)));
 
     const precautions =
       riskLevel === 'High'
@@ -320,9 +1122,7 @@ async function startServer() {
             `Keep checking weather updates in ${location} over the next 6 hours.`,
             'Make sure your flashlight, clean drinking water, and nearest shelter address are ready.',
           ]
-        : [
-            `Conditions look calm in ${location} right now. No emergency move is needed.`,
-          ];
+        : [`Conditions look calm in ${location} right now. No emergency move is needed.`];
 
     res.json({
       disasterType,
@@ -330,50 +1130,30 @@ async function startServer() {
       riskLevel,
       riskScore,
       confidencePct,
-      modelLabel: 'Simple Weather Risk Guide (Sample Model)',
+      modelLabel: 'Weather Risk Scoring Guide',
       factors,
       explanation: `${disasterType} check for ${location}: ${riskLevel} Risk (${riskScore} out of 100) based on the weather numbers entered.`,
       precautions,
     });
   });
 
-  app.post('/api/assistant', async (req, res) => {
-    try {
-      const body = (req.body || {}) as AssistantRequestBody;
-      const { normalizedTurns, contents, systemInstruction } = buildAssistantRequestPayload(body);
-
-      if (normalizedTurns.length === 0) {
-        res.status(400).json({ error: 'Please provide a question or message for NEXORA AI Helper.' });
-        return;
-      }
-
-      const ai = getGeminiClient();
-      const response = await generateWithFallback(ai, body.model, {
-        contents,
-        config: { systemInstruction },
-      });
-
-      const reply = response.text?.trim();
-      if (!reply) {
-        res.status(502).json({ error: 'NEXORA AI Assistant returned an empty response.' });
-        return;
-      }
-
-      res.json({ reply });
-    } catch (err: unknown) {
-      const { statusCode, message } = formatGeminiError(err, 'Failed to reach NEXORA AI Assistant service.');
-      res.status(statusCode).json({ error: message });
-    }
-  });
-
   app.post('/api/assistant/stream', async (req, res) => {
     let streamStarted = false;
+    let clientClosed = false;
+    res.on('close', () => {
+      if (!res.writableEnded) {
+        clientClosed = true;
+      }
+    });
+
     try {
       const body = (req.body || {}) as AssistantRequestBody;
       const { normalizedTurns, contents, systemInstruction } = buildAssistantRequestPayload(body);
 
       if (normalizedTurns.length === 0) {
-        res.status(400).json({ error: 'Please provide a question or message for NEXORA AI Helper.' });
+        res
+          .status(400)
+          .json({ error: 'Please provide a question or message for NEXORA AI Helper.' });
         return;
       }
 
@@ -382,6 +1162,8 @@ async function startServer() {
         contents,
         config: { systemInstruction },
       });
+
+      if (clientClosed) return;
 
       res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -392,6 +1174,7 @@ async function startServer() {
 
       let totalChars = 0;
       for await (const chunk of stream) {
+        if (clientClosed) break;
         const delta = chunk.text ?? '';
         if (delta) {
           totalChars += delta.length;
@@ -399,16 +1182,24 @@ async function startServer() {
         }
       }
 
-      if (totalChars === 0) {
-        res.write(
-          `data: ${JSON.stringify({ error: 'NEXORA AI Assistant returned an empty response.' })}\n\n`
-        );
-      } else {
-        res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+      if (!clientClosed) {
+        if (totalChars === 0) {
+          res.write(
+            `data: ${JSON.stringify({
+              error: 'NEXORA AI Assistant returned an empty response.',
+            })}\n\n`
+          );
+        } else {
+          res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+        }
+        res.end();
       }
-      res.end();
     } catch (err: unknown) {
-      const { statusCode, message } = formatGeminiError(err, 'Failed to reach NEXORA AI Assistant service.');
+      if (clientClosed) return;
+      const { statusCode, message } = formatGeminiError(
+        err,
+        'Failed to reach NEXORA AI Assistant service.'
+      );
       if (!streamStarted) {
         res.status(statusCode).json({ error: message });
       } else {
@@ -425,12 +1216,15 @@ async function startServer() {
         payload?: string;
       };
       if (!payload || typeof payload !== 'string' || !payload.trim()) {
-        res.status(400).json({ error: 'Provide a URL, message, or network log snippet to analyze.' });
+        res
+          .status(400)
+          .json({ error: 'Provide a URL, message, or network log snippet to analyze.' });
         return;
       }
 
+      const safeKind = kind === 'message' || kind === 'log' ? kind : 'url';
       let urlBreakdown: Record<string, string | boolean | number> | undefined;
-      if (kind === 'url') {
+      if (safeKind === 'url') {
         const cleanRaw = payload
           .trim()
           .replace(/\[\.\]/g, '.')
@@ -452,7 +1246,7 @@ async function startServer() {
 
       const ai = getGeminiClient();
       const response = await generateWithFallback(ai, DEFAULT_GEMINI_MODEL, {
-        contents: `Passively analyze this ${kind || 'url'} artifact for cybersecurity risk (do NOT fetch external links):\n\n${payload.slice(0, 4000)}`,
+        contents: `Passively analyze this ${safeKind} artifact for cybersecurity risk (do NOT fetch external links):\n\n${payload.slice(0, 4000)}`,
         config: {
           systemInstruction:
             'You are an online safety helper. Check the submitted website link, SMS/email text, or log for scams, fake login pages, or harmful activity. Write indicators and recommendations in simple, clear everyday English that anyone can understand.',
@@ -474,7 +1268,10 @@ async function startServer() {
                 items: { type: Type.STRING },
                 description: 'Suspicious words or warning signs found',
               },
-              recommendation: { type: Type.STRING, description: 'Simple, clear advice on what the person should do next' },
+              recommendation: {
+                type: Type.STRING,
+                description: 'Simple, clear advice on what the person should do next',
+              },
             },
           },
         },
@@ -531,19 +1328,33 @@ async function startServer() {
         };
       };
 
+      const safeMode =
+        mode === 'triage' || mode === 'rescue_recommend' ? mode : 'damage';
+      const safeTitle = String(title || '').trim().slice(0, 200);
+      const safeRegion = String(region || '').trim().slice(0, 120);
+      const safeNotes = String(notes || '').trim().slice(0, 1500);
+
       const ai = getGeminiClient();
       const textPrompt =
-        mode === 'triage'
-          ? `Provide AI-assisted patient triage decision support (not a medical diagnosis) for: Title="${title || ''}", Region="${region || ''}", Conscious="${patientFlags?.conscious || 'Unknown'}", Breathing="${patientFlags?.breathing || 'Unknown'}", Visible Bleeding="${patientFlags?.bleeding || 'Unknown'}", Symptoms="${patientFlags?.symptoms || notes || ''}".`
-          : mode === 'rescue_recommend'
-          ? `Recommend optimal rescue team specialization, vehicle/equipment type, and dispatch priority for: Title="${title || ''}", Region="${region || ''}", Notes="${notes || ''}".`
-          : `Perform pre-vs-post disaster imagery & damage assessment for: Title="${title || ''}", Region="${region || ''}", Operator Damage Category="${damageCategory || 'Unspecified'}", Estimated Area="${estimatedAreaKm2 || 'Assessing'} km²", Notes="${notes || ''}". Highlight possible structural/flood changes. Explicitly note that imagery alone cannot determine confirmed casualties or trapped persons.`;
+        safeMode === 'triage'
+          ? `Provide AI-assisted patient triage decision support (not a medical diagnosis) for: Title="${safeTitle}", Region="${safeRegion}", Conscious="${patientFlags?.conscious || 'Unknown'}", Breathing="${patientFlags?.breathing || 'Unknown'}", Visible Bleeding="${patientFlags?.bleeding || 'Unknown'}", Symptoms="${String(patientFlags?.symptoms || safeNotes).slice(0, 1000)}".`
+          : safeMode === 'rescue_recommend'
+          ? `Recommend optimal rescue team specialization, vehicle/equipment type, and dispatch priority for: Title="${safeTitle}", Region="${safeRegion}", Notes="${safeNotes}".`
+          : `Perform pre-vs-post disaster imagery & damage assessment for: Title="${safeTitle}", Region="${safeRegion}", Operator Damage Category="${String(damageCategory || 'Unspecified').slice(0, 80)}", Estimated Area="${String(estimatedAreaKm2 || 'Assessing').slice(0, 40)} km²", Notes="${safeNotes}". Highlight possible structural/flood changes. Explicitly note that imagery alone cannot determine confirmed casualties or trapped persons.`;
 
       const parts: Array<{ inlineData?: { mimeType: string; data: string }; text?: string }> = [];
-      if (preImageBase64 && preMimeType) {
+      if (
+        typeof preImageBase64 === 'string' &&
+        typeof preMimeType === 'string' &&
+        preMimeType.startsWith('image/')
+      ) {
         parts.push({ inlineData: { mimeType: preMimeType, data: preImageBase64 } });
       }
-      if (imageBase64 && mimeType) {
+      if (
+        typeof imageBase64 === 'string' &&
+        typeof mimeType === 'string' &&
+        mimeType.startsWith('image/')
+      ) {
         parts.push({ inlineData: { mimeType, data: imageBase64 } });
       }
       parts.push({ text: textPrompt });
@@ -565,12 +1376,29 @@ async function startServer() {
     }
   });
 
+  // Return clean JSON 404 for any unmatched /api/* route instead of falling through to SPA HTML
+  app.all('/api/*', (_req, res) => {
+    res.status(404).json({ error: 'API endpoint not found.' });
+  });
+
+  // Clean JSON error handler for malformed JSON bodies or unexpected server errors
+  app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
+    if (err instanceof SyntaxError && 'status' in err && (err as { status?: number }).status === 400) {
+      res.status(400).json({ error: 'Invalid JSON request body.' });
+      return;
+    }
+    next(err);
+  });
+
+  let viteServer: { close: () => Promise<void> } | null = null;
+
   if (!isProduction) {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
+    viteServer = vite;
     app.use(vite.middlewares);
   } else {
     const distPath = path.resolve(__dirname, 'dist');
@@ -580,9 +1408,23 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`NEXORA AI server running on http://0.0.0.0:${PORT}`);
   });
+
+  // Warm live feeds in the background right after startup so the first user request is instant
+  void refreshRealtimeFeed(false).catch(() => {});
+
+  const shutdown = async () => {
+    server.close();
+    if (viteServer) {
+      await viteServer.close().catch(() => {});
+    }
+    process.exit(0);
+  };
+
+  process.once('SIGTERM', () => void shutdown());
+  process.once('SIGINT', () => void shutdown());
 }
 
 startServer().catch((err) => {

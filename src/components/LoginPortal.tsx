@@ -4,7 +4,6 @@ import { onAuthStateChanged, signInWithPopup, signOut, User as FirebaseUser } fr
 import { auth, googleProvider } from '../firebase';
 import { verifyAndSyncUserProfile } from '../services/firestoreService';
 import { AuthUser, UserRole } from '../types/modules';
-import { NexoraLogoCenterpiece } from './NexoraBackground';
 
 interface LoginPortalProps {
   onAuthenticated: (user: AuthUser) => void;
@@ -83,16 +82,21 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({ onAuthenticated }) => 
   const isRescue = portalRole === 'rescue';
 
   return (
-    <div className="relative z-20 flex-1 flex flex-col items-center justify-center px-4 py-6 sm:py-10 w-full max-w-5xl mx-auto">
-      {/* Compact Transparent Logo Centerpiece */}
-      <div className="mb-4 sm:mb-6">
-        <NexoraLogoCenterpiece />
+    <div className="flex-1 flex flex-col items-center justify-center px-4 py-8 sm:py-12 w-full max-w-4xl mx-auto">
+      {/* Clean Brand Header */}
+      <div className="mb-6 text-center space-y-1">
+        <h1 className="font-display text-3xl font-bold tracking-tight text-slate-100">
+          NEXORA <span className="text-blue-400">AI</span>
+        </h1>
+        <p className="text-xs text-slate-400">
+          Predict. Protect. Respond. Empower.
+        </p>
       </div>
 
-      {/* Multi-Role Portal Login Container (Windows Desktop 2-Pane / Mobile Single-Column) */}
-      <div className="w-full max-w-3xl rounded-2xl border border-slate-700/70 bg-[#0C1322]/88 backdrop-blur-xl shadow-2xl overflow-hidden grid grid-cols-1 md:grid-cols-12">
+      {/* Multi-Role Portal Login Container */}
+      <div className="w-full max-w-3xl rounded-xl border border-slate-800 bg-slate-900 overflow-hidden grid grid-cols-1 md:grid-cols-12">
         {/* Left Role Selector & Scope Brief */}
-        <div className="md:col-span-5 p-5 sm:p-6 border-b md:border-b-0 md:border-r border-slate-800 bg-[#090E1A]/90 flex flex-col justify-between gap-5">
+        <div className="md:col-span-5 p-5 sm:p-6 border-b md:border-b-0 md:border-r border-slate-800 bg-slate-900/60 flex flex-col justify-between gap-5">
           <div className="space-y-4">
             <div>
               <h2 className="font-display text-base font-semibold text-slate-100">
@@ -108,10 +112,10 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({ onAuthenticated }) => 
               <button
                 type="button"
                 onClick={() => switchPortal('citizen')}
-                className={`w-full min-h-[54px] p-3 rounded-xl border text-left transition-all duration-150 flex items-start gap-3 ${
+                className={`w-full min-h-[54px] p-3 rounded-lg border text-left transition-colors flex items-start gap-3 ${
                   portalRole === 'citizen'
-                    ? 'bg-blue-600/15 border-blue-500/70 text-white'
-                    : 'bg-[#0C1322]/60 border-slate-800 text-slate-300 hover:border-slate-700'
+                    ? 'bg-blue-600/15 border-blue-500 text-white'
+                    : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
                 }`}
               >
                 <UserCheck
@@ -131,10 +135,10 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({ onAuthenticated }) => 
               <button
                 type="button"
                 onClick={() => switchPortal('rescue')}
-                className={`w-full min-h-[54px] p-3 rounded-xl border text-left transition-all duration-150 flex items-start gap-3 ${
+                className={`w-full min-h-[54px] p-3 rounded-lg border text-left transition-colors flex items-start gap-3 ${
                   isRescue
-                    ? 'bg-emerald-500/12 border-emerald-500/70 text-white'
-                    : 'bg-[#0C1322]/60 border-slate-800 text-slate-300 hover:border-slate-700'
+                    ? 'bg-emerald-500/15 border-emerald-500 text-white'
+                    : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
                 }`}
               >
                 <LifeBuoy
@@ -154,10 +158,10 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({ onAuthenticated }) => 
               <button
                 type="button"
                 onClick={() => switchPortal('administrator')}
-                className={`w-full min-h-[54px] p-3 rounded-xl border text-left transition-all duration-150 flex items-start gap-3 ${
+                className={`w-full min-h-[54px] p-3 rounded-lg border text-left transition-colors flex items-start gap-3 ${
                   isAdmin
-                    ? 'bg-amber-500/12 border-amber-500/70 text-white'
-                    : 'bg-[#0C1322]/60 border-slate-800 text-slate-300 hover:border-slate-700'
+                    ? 'bg-amber-500/15 border-amber-500 text-white'
+                    : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
                 }`}
               >
                 <Shield
@@ -177,8 +181,8 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({ onAuthenticated }) => 
           </div>
 
           {/* Portal Scope Details */}
-          <div className="pt-4 border-t border-slate-800/80 space-y-1.5 text-[11px] text-slate-400">
-            <div className="font-medium text-slate-300">
+          <div className="pt-4 border-t border-slate-800 space-y-1.5 text-[11px] text-slate-400">
+            <div className="font-medium text-slate-200">
               {isAdmin
                 ? 'What Admins Can Do (All 9 Tools)'
                 : isRescue
@@ -187,10 +191,10 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({ onAuthenticated }) => 
             </div>
             <p className="leading-relaxed">
               {isAdmin
-                ? 'Full access to disaster alerts, cyber protection, AI helper, rescue dispatch, shelters, reports, and user settings.'
+                ? 'Full access to live disaster alerts, cyber protection, AI helper, Google Maps satellite radar, rescue dispatch, shelters, reports, and user settings.'
                 : isRescue
-                ? 'View live 3D map, check disaster warnings, update rescue steps, and manage hospital/shelter capacity.'
-                : 'View live 3D disaster map, find nearby hospitals & shelters, check suspicious links, and ask the AI helper.'}
+                ? 'View live Google Maps satellite & storm radar, check disaster warnings, update rescue steps, and manage hospital/shelter capacity.'
+                : 'View live Google Maps satellite & storm radar, find nearby hospitals & shelters, check suspicious links, and ask the AI helper.'}
             </p>
           </div>
         </div>
@@ -221,8 +225,8 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({ onAuthenticated }) => 
             </p>
           </div>
 
-          <div className="p-4 rounded-xl border border-slate-800 bg-[#080C15]/90 space-y-2.5 text-xs text-slate-300">
-            <div className="flex items-center gap-2 font-medium text-slate-200">
+          <div className="p-4 rounded-lg border border-slate-800 bg-slate-950 space-y-2 text-xs text-slate-300">
+            <div className="flex items-center gap-2 font-medium text-slate-100">
               <ShieldCheck
                 className={`w-4 h-4 shrink-0 ${
                   isAdmin ? 'text-amber-400' : isRescue ? 'text-emerald-400' : 'text-blue-400'
@@ -314,7 +318,7 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({ onAuthenticated }) => 
             </button>
 
             {cachedFbUser?.email && (
-              <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-lg border border-slate-800 bg-[#080C15]/80 text-[11px] text-slate-400">
+              <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-lg border border-slate-800 bg-slate-950 text-[11px] text-slate-400">
                 <span className="truncate">
                   Google account ready: <strong className="text-slate-200">{cachedFbUser.email}</strong>
                 </span>

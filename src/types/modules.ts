@@ -1,6 +1,7 @@
 export type ModuleId =
   | 'command'
   | 'disaster'
+  | 'satellite'
   | 'cyber'
   | 'assistant'
   | 'response'
@@ -36,6 +37,30 @@ export interface DisasterForecast {
   populationAtRisk: string;
   status: 'Monitoring' | 'Warning' | 'Escalated';
   summary: string;
+  lat?: number;
+  lng?: number;
+  sourceName?: string;
+  sourceUrl?: string;
+  affectedRadiusKm?: number;
+  safeZoneRadiusKm?: number;
+}
+
+export interface LiveDisasterIncident {
+  id: string;
+  title: string;
+  category: 'Seismic' | 'Cyclone' | 'Wildfire' | 'Flood' | 'Grid Stress';
+  severity: Severity;
+  region: string;
+  lat: number;
+  lng: number;
+  metric: string;
+  populationAtRisk: string;
+  summary: string;
+  timeLabel: string;
+  sourceName: 'CurrentDisaster.com' | 'GDACS (UN/EU)' | 'NASA EONET' | 'USGS Seismic';
+  sourceUrl: string;
+  affectedRadiusKm?: number;
+  safeZoneRadiusKm?: number;
 }
 
 export interface CyberThreat {

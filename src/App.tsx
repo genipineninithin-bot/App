@@ -12,10 +12,12 @@ import {
   BellRing,
   Bot,
   Flame,
+  Globe,
   HeartPulse,
+  Home,
   LayoutDashboard,
-  LayoutGrid,
   LogOut,
+  MapPin,
   Menu,
   Search,
   Settings,
@@ -57,8 +59,15 @@ import {
   updateThreatStatus,
   verifyAndSyncUserProfile,
 } from './services/firestoreService';
+import { GoogleMapsPanel } from './components/GoogleMapsPanel';
+import { HomePageView } from './components/HomePageView';
 import { LoginPortal } from './components/LoginPortal';
-import { NexoraBackground, NexoraLogoCenterpiece } from './components/NexoraBackground';
+import {
+  DevicePermissionsState,
+  LiveGeoPosition,
+  PermissionStatus,
+  StartupPermissionsModal,
+} from './components/StartupPermissionsModal';
 import { AdminSystemModule } from './components/modules/AdminSystemModule';
 import { AlertsModule } from './components/modules/AlertsModule';
 import { AnalyticsModule } from './components/modules/AnalyticsModule';
@@ -86,12 +95,15 @@ import {
   CyberThreat,
   DisasterForecast,
   IncidentTicket,
+  LiveDisasterIncident,
   ModuleId,
   ReliefResource,
   SystemConfigState,
   UserRole,
 } from './types/modules';
 import { plainSeverity } from './utils/plainLabels';
+import { requestBestGeolocation } from '../frontend/permissions';
+import { getIncidentApprovalState } from '../frontend/departments';
 
 const PORTAL_MODE_KEY = 'nexora_portal_mode';
 
@@ -113,7 +125,7 @@ const POP_MODULES: ModuleMeta[] = [
     num: '01',
     title: 'Command Center',
     shortTitle: 'Command',
-    subtitle: 'Live overview, 3D map & quick safety counts',
+    subtitle: 'Live overview, Google Maps & quick safety counts',
     imageUrl: '/src/assets/images/module_command_center_1794980254319.jpg',
     imageAlt: 'Disaster and cybersecurity command center bridge with panoramic situational wall',
     roles: ['citizen', 'rescue', 'administrator'],
@@ -131,8 +143,19 @@ const POP_MODULES: ModuleMeta[] = [
     icon: Flame,
   },
   {
-    id: 'cyber',
+    id: 'satellite',
     num: '03',
+    title: 'Live Satellite & Radar Stream',
+    shortTitle: 'Satellite Stream',
+    subtitle: 'Zoom Earth-style radar, storm tracks & forecast overlays',
+    imageUrl: '/src/assets/images/module_disaster_monitoring_1794979857261.jpg',
+    imageAlt: 'Live orbital satellite and radar storm tracking viewport',
+    roles: ['citizen', 'rescue', 'administrator'],
+    icon: Globe,
+  },
+  {
+    id: 'cyber',
+    num: '04',
     title: 'Scam & Link Checker',
     shortTitle: 'Cyber Safety',
     subtitle: 'Check if a website link or text message is a scam',
@@ -143,7 +166,7 @@ const POP_MODULES: ModuleMeta[] = [
   },
   {
     id: 'assistant',
-    num: '04',
+    num: '05',
     title: 'NEXORA AI Helper',
     shortTitle: 'AI Helper',
     subtitle: 'Simple safety answers, first aid & checklists',
@@ -154,7 +177,7 @@ const POP_MODULES: ModuleMeta[] = [
   },
   {
     id: 'response',
-    num: '05',
+    num: '06',
     title: 'Emergency Help & Reports',
     shortTitle: 'Help & SOS',
     subtitle: 'Report an emergency & track rescue teams',
@@ -165,7 +188,7 @@ const POP_MODULES: ModuleMeta[] = [
   },
   {
     id: 'relief',
-    num: '06',
+    num: '07',
     title: 'Hospitals, Shelters & Supplies',
     shortTitle: 'Help Centers',
     subtitle: 'Find nearby hospitals, safe shelters & aid',
@@ -176,7 +199,7 @@ const POP_MODULES: ModuleMeta[] = [
   },
   {
     id: 'analytics',
-    num: '07',
+    num: '08',
     title: 'Charts & Safety Trends',
     shortTitle: 'Trends',
     subtitle: 'Easy-to-read charts of disasters & cyber risks',
@@ -187,7 +210,7 @@ const POP_MODULES: ModuleMeta[] = [
   },
   {
     id: 'alerts',
-    num: '08',
+    num: '09',
     title: 'Alerts & Warnings',
     shortTitle: 'Alerts',
     subtitle: 'Official safety alerts & SMS/email settings',
@@ -198,7 +221,7 @@ const POP_MODULES: ModuleMeta[] = [
   },
   {
     id: 'admin',
-    num: '09',
+    num: '10',
     title: 'Admin Settings',
     shortTitle: 'Admin',
     subtitle: 'Manage user accounts, AI & activity logs',
@@ -227,102 +250,107 @@ const ModuleLauncherCard: React.FC<ModuleLauncherCardProps> = ({
   onImageError,
 }) => {
   const Icon = mod.icon;
-  const [spotlight, setSpotlight] = useState({ x: 50, y: 50, active: false });
-
-  const handlePointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
-    if (e.pointerType === 'touch') return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / Math.max(1, rect.width)) * 100;
-    const y = ((e.clientY - rect.top) / Math.max(1, rect.height)) * 100;
-    setSpotlight({ x, y, active: true });
-  };
-
-  const handlePointerLeave = () => {
-    setSpotlight((prev) => ({ ...prev, active: false }));
-  };
 
   return (
     <button
       type="button"
       onClick={onOpen}
-      onPointerMove={handlePointerMove}
-      onPointerLeave={handlePointerLeave}
-      className={`group relative text-left rounded-xl border backdrop-blur-md overflow-hidden flex flex-col transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-2 hover:scale-[1.015] active:scale-[0.98] xl:group-hover/dock:opacity-75 hover:!opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+      className={`group relative text-left rounded-xl border overflow-hidden flex flex-col transition-all duration-150 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
         isOpen
-          ? 'bg-blue-950/55 border-blue-400/85 shadow-[0_18px_38px_-12px_rgba(37,99,235,0.55)]'
-          : 'bg-[#0C1322]/82 border-slate-700/65 hover:bg-[#111D35]/95 hover:border-blue-400/75 hover:shadow-[0_22px_44px_-14px_rgba(37,99,235,0.5)]'
+          ? 'bg-slate-900 border-blue-500'
+          : 'bg-slate-900 border-slate-800 hover:border-slate-700 hover:bg-slate-900/80'
       }`}
     >
-      <span
-        aria-hidden="true"
-        className={`pointer-events-none absolute top-0 left-0 right-0 z-20 h-[2px] bg-gradient-to-r from-transparent via-blue-400 to-transparent transition-transform duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] origin-center ${
-          isOpen ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
-        }`}
-      />
-
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 z-10 transition-opacity duration-200"
-        style={{
-          opacity: spotlight.active ? 1 : 0,
-          background: `radial-gradient(240px circle at ${spotlight.x}% ${spotlight.y}%, rgba(96, 165, 250, 0.2), transparent 70%)`,
-        }}
-      />
-
-      <div className="relative w-full h-20 sm:h-24 lg:h-[88px] xl:h-24 overflow-hidden bg-slate-900 border-b border-slate-800/80 shrink-0">
-        {!isImageBroken ? (
+      <div className="relative w-full h-24 overflow-hidden bg-slate-950 border-b border-slate-800 shrink-0">
+        {mod.id === 'satellite' ? (
+          <div className="h-full w-full relative bg-gradient-to-br from-slate-950 via-sky-950/80 to-indigo-950 flex items-center justify-center overflow-hidden">
+            <svg
+              viewBox="0 0 280 96"
+              className="w-full h-full opacity-90 transition-transform duration-300 group-hover:scale-105"
+              aria-hidden="true"
+            >
+              <defs>
+                <radialGradient id="satGlow" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.45" />
+                  <stop offset="60%" stopColor="#0ea5e9" stopOpacity="0.12" />
+                  <stop offset="100%" stopColor="#020617" stopOpacity="0" />
+                </radialGradient>
+              </defs>
+              <rect width="280" height="96" fill="url(#satGlow)" />
+              {/* Coordinate grid lines */}
+              <path
+                d="M0 24 H280 M0 48 H280 M0 72 H280 M56 0 V96 M112 0 V96 M168 0 V96 M224 0 V96"
+                stroke="#1e3a5f"
+                strokeWidth="0.7"
+                strokeDasharray="3 3"
+              />
+              {/* Radar concentric sweep rings */}
+              <circle cx="140" cy="48" r="16" fill="none" stroke="#38bdf8" strokeOpacity="0.55" strokeWidth="1" />
+              <circle cx="140" cy="48" r="32" fill="none" stroke="#38bdf8" strokeOpacity="0.38" strokeWidth="1" />
+              <circle cx="140" cy="48" r="48" fill="none" stroke="#0ea5e9" strokeOpacity="0.25" strokeWidth="1" />
+              <circle cx="140" cy="48" r="68" fill="none" stroke="#0ea5e9" strokeOpacity="0.15" strokeWidth="1" />
+              {/* Radar sweep wedge */}
+              <path d="M140 48 L184 16 A54 54 0 0 1 194 48 Z" fill="#38bdf8" fillOpacity="0.22" />
+              {/* Storm trajectory arc & nodes */}
+              <path
+                d="M95 76 Q128 58 140 48 T188 18"
+                fill="none"
+                stroke="#a855f7"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+              <circle cx="118" cy="62" r="3" fill="#a855f7" stroke="#ffffff" strokeWidth="1" />
+              <circle cx="140" cy="48" r="5" fill="#10b981" stroke="#ffffff" strokeWidth="1.5" />
+              <circle cx="164" cy="34" r="3" fill="#a855f7" stroke="#ffffff" strokeWidth="1" />
+              <circle cx="186" cy="20" r="2.5" fill="#38bdf8" />
+            </svg>
+            <span className="absolute bottom-1.5 left-2.5 px-1.5 py-0.5 rounded bg-slate-950/80 border border-sky-500/40 text-[9px] font-mono text-sky-300">
+              DOPPLER · IR · ORBIT
+            </span>
+          </div>
+        ) : !isImageBroken ? (
           <img
             src={mod.imageUrl}
             alt={mod.imageAlt}
             referrerPolicy="no-referrer"
             onError={onImageError}
-            className="h-full w-full object-cover transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-110 group-hover:brightness-115 group-hover:saturate-110"
+            className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
           />
         ) : (
-          <div className="h-full w-full bg-gradient-to-br from-slate-800 via-slate-900 to-blue-950 flex items-center justify-center">
-            <Icon className="w-7 h-7 text-blue-400/70" aria-hidden="true" />
+          <div className="h-full w-full bg-slate-800 flex items-center justify-center">
+            <Icon className="w-7 h-7 text-blue-400" aria-hidden="true" />
           </div>
         )}
 
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 -translate-x-[130%] group-hover:translate-x-[130%] transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] bg-gradient-to-r from-transparent via-white/18 to-transparent skew-x-[-22deg]"
-        />
-
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#0C1322] via-[#0C1322]/25 to-transparent opacity-90 group-hover:opacity-70 transition-opacity duration-200"
+          className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/20 to-transparent"
         />
 
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute top-2 right-2 w-6 h-6 rounded-md bg-slate-950/70 border border-blue-400/40 backdrop-blur-sm flex items-center justify-center opacity-0 -translate-y-1 translate-x-1 group-hover:opacity-100 group-hover:translate-y-0 group-hover:translate-x-0 transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]"
+          className="pointer-events-none absolute top-2 right-2 w-6 h-6 rounded-md bg-slate-900/80 border border-slate-700 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
         >
-          <ArrowUpRight className="w-3.5 h-3.5 text-blue-300" />
+          <ArrowUpRight className="w-3.5 h-3.5 text-slate-200" />
         </span>
       </div>
 
-      <div className="relative z-10 p-2.5 sm:p-3 flex-1 flex flex-col justify-between gap-1.5 w-full">
+      <div className="p-3 flex-1 flex flex-col justify-between gap-1.5 w-full">
         <div className="flex items-center justify-between gap-2 w-full">
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <Icon
-              className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-400 group-hover:text-blue-300 group-hover:scale-110 transition-all duration-200 shrink-0"
-              aria-hidden="true"
-            />
-            <span className="text-[11px] font-mono text-slate-400 group-hover:text-blue-300 transition-colors">
-              {mod.num}
-            </span>
+          <div className="flex items-center gap-1.5">
+            <Icon className="w-4 h-4 text-blue-400 shrink-0" aria-hidden="true" />
+            <span className="text-[11px] font-mono text-slate-400">{mod.num}</span>
           </div>
-          <span className="text-[10px] sm:text-[11px] font-mono tabular-nums text-slate-400 group-hover:text-slate-100 transition-colors truncate">
+          <span className="text-[11px] font-mono tabular-nums text-slate-400 truncate">
             {metricLabel}
           </span>
         </div>
 
         <div>
-          <div className="text-xs sm:text-[13px] font-semibold text-slate-100 group-hover:text-white leading-snug transition-colors">
+          <div className="text-sm font-semibold text-slate-100 leading-snug">
             {mod.title}
           </div>
-          <div className="mt-0.5 text-[11px] text-slate-400 group-hover:text-slate-300 line-clamp-1 hidden sm:block transition-colors">
+          <div className="mt-0.5 text-xs text-slate-400 line-clamp-1 hidden sm:block">
             {mod.subtitle}
           </div>
         </div>
@@ -335,7 +363,7 @@ export default function App() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
 
-  const [activeModule, setActiveModule] = useState<ModuleId | 'overview'>('command');
+  const [activeModule, setActiveModule] = useState<ModuleId | 'overview'>('overview');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [forecasts, setForecasts] = useState<DisasterForecast[]>(INITIAL_DISASTERS);
   const [threats, setThreats] = useState<CyberThreat[]>(INITIAL_THREATS);
@@ -353,8 +381,24 @@ export default function App() {
   const [isSyncingUsgs, setIsSyncingUsgs] = useState(false);
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [mapsQuotaExceeded, setMapsQuotaExceeded] = useState(false);
   const [topSearch, setTopSearch] = useState('');
   const [showNotifPopover, setShowNotifPopover] = useState(false);
+  const [showPermissionsModal, setShowPermissionsModal] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem('nexora_permissions_prompt_seen_v1') !== '1';
+    } catch {
+      return true;
+    }
+  });
+  const [devicePermissions, setDevicePermissions] = useState<DevicePermissionsState>({
+    location: 'prompt',
+    notifications: 'prompt',
+    camera: 'prompt',
+    microphone: 'prompt',
+  });
+  const [liveLocation, setLiveLocation] = useState<LiveGeoPosition | null>(null);
+  const [locationTrackingEnabled, setLocationTrackingEnabled] = useState(false);
   const [clockLabel, setClockLabel] = useState(() =>
     new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
   );
@@ -388,6 +432,93 @@ export default function App() {
       );
     }, 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  // Auto-start live GPS immediately on mount if location permission was already granted by the browser
+  useEffect(() => {
+    if (!('geolocation' in navigator) || !navigator.permissions?.query) return;
+    let active = true;
+    void navigator.permissions
+      .query({ name: 'geolocation' })
+      .then((res) => {
+        if (!active) return;
+        if (res.state === 'granted') {
+          setDevicePermissions((prev) => ({ ...prev, location: 'granted' }));
+          setLocationTrackingEnabled(true);
+          void requestBestGeolocation().then((fix) => {
+            if (active && fix.ok) {
+              setLiveLocation({
+                lat: fix.lat,
+                lng: fix.lng,
+                accuracyMeters: fix.accuracyMeters,
+                updatedAt: fix.updatedAt,
+              });
+            }
+          });
+        } else if (res.state === 'denied') {
+          setDevicePermissions((prev) => ({ ...prev, location: 'denied' }));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!locationTrackingEnabled || !('geolocation' in navigator)) return;
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        setLiveLocation({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracyMeters: Math.round(pos.coords.accuracy),
+          updatedAt: new Date().toISOString(),
+        });
+      },
+      () => {
+        // Keep last known fix if transient GPS drop occurs
+      },
+      { enableHighAccuracy: false, maximumAge: 30_000, timeout: 15_000 }
+    );
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+    };
+  }, [locationTrackingEnabled]);
+
+  const handleUpdatePermission = React.useCallback(
+    (key: keyof DevicePermissionsState, status: PermissionStatus) => {
+      setDevicePermissions((prev) => (prev[key] === status ? prev : { ...prev, [key]: status }));
+    },
+    []
+  );
+
+  const handleLocationGranted = React.useCallback((pos: LiveGeoPosition) => {
+    setLiveLocation(pos);
+    setLocationTrackingEnabled(true);
+    setToast('Live GPS location enabled and synced to maps.');
+  }, []);
+
+  const handleRevokeLocation = React.useCallback(() => {
+    setLocationTrackingEnabled(false);
+    setLiveLocation(null);
+    setDevicePermissions((prev) => ({ ...prev, location: 'prompt' }));
+    setToast('Live GPS location paused.');
+  }, []);
+
+  const handleClosePermissionsModal = React.useCallback(() => {
+    setShowPermissionsModal(false);
+    try {
+      sessionStorage.setItem('nexora_permissions_prompt_seen_v1', '1');
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
+
+  useEffect(() => {
+    const onQuotaExceeded = () => setMapsQuotaExceeded(true);
+    window.addEventListener('gmp-quota-exceeded', onQuotaExceeded);
+    return () => window.removeEventListener('gmp-quota-exceeded', onQuotaExceeded);
   }, []);
 
   const recordCyberScan = (_kind: 'url' | 'message' | 'log', verdict: string) => {
@@ -601,7 +732,7 @@ export default function App() {
 
   const handleAuthenticated = (authUser: AuthUser) => {
     setUser(authUser);
-    setActiveModule('command');
+    setActiveModule('overview');
     setMobileNavOpen(false);
     const portalLabel =
       authUser.role === 'administrator'
@@ -635,7 +766,7 @@ export default function App() {
 
   const handleSignOut = async () => {
     localStorage.removeItem(PORTAL_MODE_KEY);
-    setActiveModule('command');
+    setActiveModule('overview');
     setMobileNavOpen(false);
     setUser(null);
     try {
@@ -645,74 +776,131 @@ export default function App() {
     }
   };
 
-  const handleSyncUsgs = async () => {
+  const handleSyncUsgs = async (forceRefresh = true) => {
     setIsSyncingUsgs(true);
     setSyncNotice(null);
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 7000);
+      const timeout = setTimeout(() => controller.abort(), 9000);
       const res = await fetch(
-        'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson',
+        `/api/disasters/live${forceRefresh ? '?refresh=1' : ''}`,
         { signal: controller.signal }
       );
       clearTimeout(timeout);
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      const features = Array.isArray(json?.features) ? json.features.slice(0, 4) : [];
+      const json = (await res.json()) as {
+        incidents?: LiveDisasterIncident[];
+        sources?: {
+          currentDisaster?: string;
+          gdacs?: string;
+          nasaEonet?: string;
+          usgs?: string;
+        };
+      };
+      const liveItems = Array.isArray(json?.incidents) ? json.incidents : [];
 
-      if (features.length === 0) {
-        setSyncNotice('USGS feed polled: no new M4.5+ events reported.');
+      if (liveItems.length === 0) {
+        setSyncNotice('Live disaster feeds polled: no new active incidents returned right now.');
       } else {
-        const mapped: DisasterForecast[] = features.map(
-          (f: {
-            id: string;
-            properties: { mag: number; place: string };
-            geometry: { coordinates: number[] };
-          }) => {
-            const mag = typeof f.properties.mag === 'number' ? f.properties.mag : 4.5;
-            const depth = Math.round(f.geometry?.coordinates?.[2] || 10);
-            const severity =
-              mag >= 6.2 ? 'Critical' : mag >= 5.5 ? 'High' : mag >= 5.0 ? 'Moderate' : 'Low';
-            return {
-              id: `USGS-${String(f.id).slice(0, 6).toUpperCase()}`,
-              title: `M ${mag.toFixed(1)} Seismic Event — ${f.properties.place || 'Offshore Zone'}`,
-              category: 'Seismic',
-              severity,
-              region: f.properties.place || 'Global Seismic Mesh',
-              horizon: '6h',
-              confidencePct: 96,
-              metric: `M ${mag.toFixed(1)} · ${depth} km depth`,
-              gridExposureMw: Math.round(mag * 95),
-              populationAtRisk: mag >= 6.0 ? '250,000+' : 'Assessing',
-              status: mag >= 5.8 ? 'Warning' : 'Monitoring',
-              summary: 'Live seismic forecast ingested from USGS real-time GeoJSON network.',
-            };
-          }
-        );
+        const mappedForecasts: DisasterForecast[] = liveItems.map((item) => ({
+          id: item.id,
+          title: item.title,
+          category: item.category,
+          severity: item.severity,
+          region: item.region,
+          horizon: '6h',
+          confidencePct: item.sourceName === 'CurrentDisaster.com' ? 88 : 96,
+          metric: item.metric,
+          gridExposureMw:
+            item.severity === 'Critical'
+              ? 1250
+              : item.severity === 'High'
+              ? 680
+              : 240,
+          populationAtRisk: item.populationAtRisk,
+          status: item.severity === 'Critical' || item.severity === 'High' ? 'Warning' : 'Monitoring',
+          summary: `${item.summary} (${item.sourceName})`,
+          lat: item.lat,
+          lng: item.lng,
+          sourceName: item.sourceName,
+          sourceUrl: item.sourceUrl,
+          affectedRadiusKm: item.affectedRadiusKm,
+          safeZoneRadiusKm: item.safeZoneRadiusKm,
+        }));
+
+        const mappedIncidents: IncidentTicket[] = liveItems
+          .filter((i) => i.severity === 'Critical' || i.severity === 'High')
+          .slice(0, 6)
+          .map((item) => ({
+            id: `LIVE-${item.id}`,
+            title: item.title,
+            domain: 'Disaster',
+            severity: item.severity,
+            region: item.region,
+            assignedUnit: `${item.sourceName} Monitor`,
+            platformSupport: 'Windows & Mobile',
+            status: 'In Progress',
+            updatedAt: item.timeLabel || 'Live',
+            notes: `${item.summary} Source: ${item.sourceUrl}`,
+            locationCoords: `${item.lat.toFixed(4)}, ${item.lng.toFixed(4)}`,
+            verifiedByAdmin: true,
+            damageAssessment: item.metric,
+          }));
 
         setForecasts((prev) => {
-          const existing = new Set(prev.map((p) => p.id));
-          const novel = mapped.filter((m) => !existing.has(m.id));
-          return [...novel, ...prev];
+          const liveIds = new Set(mappedForecasts.map((m) => m.id));
+          const retained = prev.filter((p) => !liveIds.has(p.id));
+          return [...mappedForecasts, ...retained];
         });
 
-        if (user?.role === 'administrator' && auth.currentUser) {
+        setIncidents((prev) => {
+          const liveIds = new Set(mappedIncidents.map((m) => m.id));
+          const retained = prev.filter((p) => !liveIds.has(p.id));
+          return [...mappedIncidents, ...retained];
+        });
+
+        const activeSources = [
+          json.sources?.currentDisaster === 'live' ? 'CurrentDisaster.com' : null,
+          json.sources?.gdacs === 'live' ? 'GDACS' : null,
+          json.sources?.nasaEonet === 'live' ? 'NASA EONET' : null,
+          json.sources?.usgs === 'live' ? 'USGS' : null,
+        ].filter(Boolean);
+
+        if (user?.role === 'administrator' && auth.currentUser && forceRefresh) {
           await Promise.all(
-            mapped.map((item) => saveDisasterForecast(item, auth.currentUser!.uid))
+            mappedForecasts.slice(0, 4).map((item) => saveDisasterForecast(item, auth.currentUser!.uid))
           );
-          setSyncNotice(`Synced & persisted ${mapped.length} live USGS seismic feeds to Firestore.`);
-          recordAudit('USGS_SYNC', 'disasters', `Persisted ${mapped.length} USGS feeds`);
+          setSyncNotice(
+            `Synced ${mappedForecasts.length} live disaster incidents (${activeSources.join(', ')}) and updated Google Maps.`
+          );
+          recordAudit(
+            'LIVE_DISASTER_SYNC',
+            'disasters',
+            `Synced ${mappedForecasts.length} events from ${activeSources.join(', ')}`
+          );
         } else {
-          setSyncNotice(`Synced ${mapped.length} live USGS seismic feeds.`);
+          setSyncNotice(
+            `Synced ${mappedForecasts.length} live incidents from ${activeSources.join(', ') || 'live feeds'}.`
+          );
         }
       }
     } catch {
-      setSyncNotice('Live USGS endpoint unreachable from sandbox; showing verified baseline forecasts.');
+      setSyncNotice('Live disaster feeds temporarily unreachable; showing verified baseline records.');
     } finally {
       setIsSyncingUsgs(false);
     }
   };
+
+  useEffect(() => {
+    if (!user) return;
+    void handleSyncUsgs(false);
+    const timer = window.setInterval(() => {
+      void handleSyncUsgs(false);
+    }, 180_000);
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   const handleCreateWarning = async (forecast: DisasterForecast) => {
     if (user?.role !== 'administrator' || !auth.currentUser) return;
@@ -819,9 +1007,17 @@ export default function App() {
     if (!user || !auth.currentUser) return;
     try {
       await createIncidentTicket(ticket, auth.currentUser.uid, user.role === 'administrator');
-      setIncidents((prev) => [ticket, ...prev]);
+      const savedTicket: IncidentTicket = {
+        ...ticket,
+        verifiedByAdmin: user.role === 'administrator' ? Boolean(ticket.verifiedByAdmin ?? true) : false,
+      };
+      setIncidents((prev) => [savedTicket, ...prev]);
       recordAudit('INCIDENT_CREATED', ticket.id, ticket.title);
-      setToast(`Dispatched ${ticket.id} to ${ticket.platformSupport}.`);
+      setToast(
+        user.role === 'administrator'
+          ? `Dispatched ${ticket.id} to ${ticket.assignedUnit}.`
+          : `Emergency SOS ${ticket.id} submitted — pending Administrator approval & department assignment.`
+      );
     } catch (err) {
       setToast(formatActionError(err, 'Failed to submit emergency report.'));
     }
@@ -840,7 +1036,13 @@ export default function App() {
         )
       );
       recordAudit('INCIDENT_ADMIN_UPDATE', id, 'Updated verification, damage, impact, or rescue assignment');
-      setToast(`Updated incident ${id} operational telemetry.`);
+      if (updates.verifiedByAdmin === true && updates.assignedUnit) {
+        setToast(`Approved ${id} & assigned to ${updates.assignedUnit} — now live on the map with hazard symbol & safe zone.`);
+      } else if (updates.verifiedByAdmin === false) {
+        setToast(`Rejected ${id} — removed from public map.`);
+      } else {
+        setToast(`Updated incident ${id} operational telemetry.`);
+      }
     } catch (err) {
       setToast(formatActionError(err, 'Failed to update incident details.'));
     }
@@ -1026,6 +1228,8 @@ export default function App() {
         return `${forecasts.length + incidents.filter((i) => i.status !== 'Resolved').length} live`;
       case 'disaster':
         return `${forecasts.length} feeds`;
+      case 'satellite':
+        return 'STREAM';
       case 'cyber':
         return user?.role === 'administrator'
           ? `${threats.filter((t) => t.status !== 'Contained').length} active`
@@ -1054,43 +1258,66 @@ export default function App() {
   };
 
   return (
-    <div className="relative min-h-screen w-full overflow-x-hidden bg-[#070B13] text-slate-100 flex flex-col">
-      <NexoraBackground />
+    <div className="relative min-h-screen w-full overflow-x-hidden bg-slate-950 text-slate-100 flex flex-col">
+      {mapsQuotaExceeded && (
+        <div
+          role="alert"
+          className="sticky top-0 z-50 w-full bg-amber-50 border-b border-amber-300 text-amber-950 px-4 py-2.5 text-sm flex items-center justify-between gap-4"
+        >
+          <span>
+            This app uses a Google Maps Platform demo key that has reached its daily quota. To continue using map features without interruption, switch to your own Google Cloud API key.{' '}
+            <a
+              href="https://developers.google.com/maps/ai/ai-studio?utm_campaign=gmp_mcp_codeassist_v1_aistudio#quota_exceeded_errors"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline font-medium hover:text-amber-800"
+            >
+              Learn how →
+            </a>
+          </span>
+          <button
+            type="button"
+            onClick={() => setMapsQuotaExceeded(false)}
+            aria-label="Dismiss"
+            className="text-amber-900 hover:text-amber-700 font-semibold px-1"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {isCheckingSession ? (
-        <div className="relative z-10 flex-1 flex flex-col items-center justify-center gap-3 px-4">
-          <NexoraLogoCenterpiece />
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg border border-slate-800 bg-[#0C1322]/90 text-xs font-mono text-slate-300">
-            <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" aria-hidden="true" />
-            <span>Initializing NEXORA AI Operations Session...</span>
+        <div className="flex-1 flex flex-col items-center justify-center gap-3 px-4">
+          <div className="font-display text-2xl font-bold tracking-tight text-slate-100">
+            NEXORA <span className="text-blue-400">AI</span>
+          </div>
+          <div className="px-4 py-2 rounded-lg border border-slate-800 bg-slate-900 text-xs font-mono text-slate-300">
+            Loading your session...
           </div>
         </div>
       ) : !user ? (
         <LoginPortal onAuthenticated={handleAuthenticated} />
       ) : (
-        <div className="relative z-20 flex-1 flex flex-col h-screen overflow-hidden">
+        <div className="flex-1 flex flex-col h-screen overflow-hidden">
           {/* Top Command Navigation Bar */}
-          <header className="relative z-30 w-full px-3.5 sm:px-5 py-2.5 border-b border-slate-800/90 bg-[#090E1A]/92 backdrop-blur-md flex items-center justify-between gap-3 shrink-0">
+          <header className="relative z-30 w-full px-4 sm:px-5 py-2.5 border-b border-slate-800 bg-slate-900 flex items-center justify-between gap-3 shrink-0">
             <div className="flex items-center gap-3 min-w-0">
               <button
                 type="button"
                 onClick={() => setMobileNavOpen((v) => !v)}
                 aria-label="Toggle navigation sidebar"
-                className="lg:hidden min-h-[38px] min-w-[38px] flex items-center justify-center rounded-lg border border-slate-700/80 bg-[#0C1322] text-slate-200 hover:bg-slate-800"
+                className="lg:hidden min-h-[38px] min-w-[38px] flex items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
               >
                 {mobileNavOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
               </button>
 
               <button
                 type="button"
-                onClick={() => navigateTo('command')}
+                onClick={() => navigateTo('overview')}
                 className="text-left flex items-center gap-2.5 min-w-0"
               >
-                <span className="font-display text-sm sm:text-base font-bold tracking-tight text-slate-100 whitespace-nowrap shrink-0">
-                  NEXORA <span className="font-semibold text-blue-400">AI</span>
-                </span>
-                <span className="hidden xl:inline text-[10px] font-mono uppercase tracking-[0.16em] text-blue-300/75 border-l border-slate-800 pl-2.5">
-                  Predict · Protect · Respond · Empower
+                <span className="font-display text-base font-bold tracking-tight text-slate-100 whitespace-nowrap shrink-0">
+                  NEXORA <span className="text-blue-400">AI</span>
                 </span>
               </button>
 
@@ -1106,7 +1333,7 @@ export default function App() {
                   onChange={(e) => setTopSearch(e.target.value)}
                   placeholder="Jump to module, region, ID..."
                   aria-label="Global quick search"
-                  className="w-full min-h-[36px] pl-8 pr-3 text-xs rounded-lg border border-slate-700/80 bg-[#0C1322]/90 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
+                  className="w-full min-h-[36px] pl-8 pr-3 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
                 />
                 {topSearch.trim().length > 0 && (() => {
                   const q = topSearch.trim().toLowerCase();
@@ -1117,7 +1344,7 @@ export default function App() {
                     .filter((i) => `${i.id} ${i.title} ${i.region}`.toLowerCase().includes(q))
                     .slice(0, 3);
                   return (
-                    <div className="absolute left-0 right-0 mt-1.5 rounded-xl border border-slate-700 bg-[#0C1322]/98 shadow-2xl overflow-hidden z-50">
+                    <div className="absolute left-0 right-0 mt-1.5 rounded-lg border border-slate-700 bg-slate-900 shadow-xl overflow-hidden z-50">
                       {matchedMods.map((m) => (
                         <button
                           key={m.id}
@@ -1126,7 +1353,7 @@ export default function App() {
                             navigateTo(m.id);
                             setTopSearch('');
                           }}
-                          className="w-full px-3 py-2 text-left text-xs text-slate-200 hover:bg-blue-600/20 flex items-center justify-between"
+                          className="w-full px-3 py-2 text-left text-xs text-slate-200 hover:bg-slate-800 flex items-center justify-between"
                         >
                           <span>{m.num}. {m.title}</span>
                           <span className="font-mono text-[10px] text-blue-400">Module</span>
@@ -1140,7 +1367,7 @@ export default function App() {
                             navigateTo('response');
                             setTopSearch('');
                           }}
-                          className="w-full px-3 py-2 text-left text-xs text-slate-300 hover:bg-blue-600/20 flex items-center justify-between border-t border-slate-800/80"
+                          className="w-full px-3 py-2 text-left text-xs text-slate-300 hover:bg-slate-800 flex items-center justify-between border-t border-slate-800"
                         >
                           <span className="truncate mr-2">{i.title}</span>
                           <span className="font-mono text-[10px] text-amber-400 shrink-0">{i.id}</span>
@@ -1164,13 +1391,33 @@ export default function App() {
                 <span className="text-slate-200">{clockLabel}</span>
               </div>
 
+              {/* Device Permissions & Live GPS Button */}
+              <button
+                type="button"
+                onClick={() => setShowPermissionsModal(true)}
+                title="Manage live GPS location, notifications, camera & microphone permissions"
+                className={`min-h-[36px] px-2.5 py-1.5 rounded-lg border text-xs inline-flex items-center gap-1.5 transition-colors ${
+                  liveLocation
+                    ? 'border-emerald-500/40 bg-emerald-950/40 text-emerald-300 hover:bg-emerald-950/70'
+                    : 'border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700'
+                }`}
+              >
+                <MapPin
+                  className={`w-3.5 h-3.5 ${liveLocation ? 'text-emerald-400' : 'text-blue-400'}`}
+                  aria-hidden="true"
+                />
+                <span className="hidden lg:inline text-[11px] font-medium">
+                  {liveLocation ? 'Live GPS' : 'Access'}
+                </span>
+              </button>
+
               {/* Notification Center Bell */}
               <div className="relative">
                 <button
                   type="button"
                   onClick={() => setShowNotifPopover((v) => !v)}
                   aria-label="Open alert notifications"
-                  className="min-h-[36px] px-2.5 py-1.5 rounded-lg border border-slate-700/80 bg-[#0C1322]/90 text-slate-200 hover:bg-slate-800 inline-flex items-center gap-1.5"
+                  className="min-h-[36px] px-2.5 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 inline-flex items-center gap-1.5 transition-colors"
                 >
                   <Bell className="w-3.5 h-3.5 text-amber-400" aria-hidden="true" />
                   <span className="font-mono text-[11px] tabular-nums">
@@ -1183,7 +1430,7 @@ export default function App() {
                     .filter((a) => user.role === 'administrator' || a.status === 'Published')
                     .slice(0, 4);
                   return (
-                    <div className="absolute right-0 mt-2 w-72 sm:w-80 rounded-xl border border-slate-700 bg-[#0C1322]/98 shadow-2xl overflow-hidden z-50">
+                    <div className="absolute right-0 mt-2 w-72 sm:w-80 rounded-lg border border-slate-700 bg-slate-900 shadow-xl overflow-hidden z-50">
                       <div className="px-3.5 py-2.5 border-b border-slate-800 flex items-center justify-between text-xs">
                         <span className="font-semibold text-slate-100">Latest Safety Alerts</span>
                         <button
@@ -1205,7 +1452,7 @@ export default function App() {
                               key={a.id}
                               type="button"
                               onClick={() => navigateTo('alerts')}
-                              className="w-full px-3.5 py-2.5 text-left hover:bg-slate-900/70 space-y-0.5"
+                              className="w-full px-3.5 py-2.5 text-left hover:bg-slate-800/70 space-y-0.5"
                             >
                               <div className="flex items-center justify-between text-[10px] font-mono">
                                 <span className="text-amber-400">{plainSeverity(a.severity)}</span>
@@ -1247,7 +1494,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={handleSignOut}
-                className="min-h-[36px] px-3 py-1.5 rounded-lg border border-slate-700/80 bg-[#0C1322]/90 text-xs font-medium text-slate-200 hover:bg-slate-800 transition-colors whitespace-nowrap shrink-0 inline-flex items-center gap-1.5"
+                className="min-h-[36px] px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-xs font-medium text-slate-200 hover:bg-slate-700 transition-colors whitespace-nowrap shrink-0 inline-flex items-center gap-1.5"
               >
                 <LogOut className="w-3.5 h-3.5" aria-hidden="true" />
                 <span>Sign Out</span>
@@ -1271,12 +1518,12 @@ export default function App() {
               aria-label="NEXORA AI Module Navigation"
               className={`${
                 mobileNavOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-              } fixed lg:static inset-y-0 left-0 z-40 w-64 shrink-0 border-r border-slate-800/90 bg-[#090E1A]/96 lg:bg-[#090E1A]/85 backdrop-blur-xl flex flex-col justify-between transition-transform duration-200 ease-out pt-14 lg:pt-0`}
+              } fixed lg:static inset-y-0 left-0 z-40 w-64 shrink-0 border-r border-slate-800 bg-slate-900 flex flex-col justify-between transition-transform duration-200 ease-out pt-14 lg:pt-0`}
             >
               <div className="flex-1 overflow-y-auto p-3 space-y-1">
-                <div className="px-2.5 py-2 mb-1 rounded-lg border border-slate-800/90 bg-[#0C1322]/85">
+                <div className="px-2.5 py-2 mb-1.5 rounded-lg border border-slate-800 bg-slate-950">
                   <div className="text-[10px] font-mono uppercase tracking-wider text-slate-400">
-                    Active Clearance
+                    Active Role
                   </div>
                   <div className="text-xs font-semibold text-slate-100 mt-0.5 truncate">
                     {user.role === 'administrator'
@@ -1286,6 +1533,29 @@ export default function App() {
                       : 'Citizen Safety Portal'}
                   </div>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => navigateTo('overview')}
+                  className={`w-full min-h-[40px] px-2.5 py-2 mb-1 rounded-lg text-left transition-colors flex items-center justify-between gap-2 ${
+                    activeModule === 'overview'
+                      ? 'bg-blue-600/15 border border-blue-500/50 text-white'
+                      : 'border border-transparent text-slate-300 hover:bg-slate-800 hover:text-white'
+                  }`}
+                >
+                  <span className="flex items-center gap-2.5 min-w-0">
+                    <Home
+                      className={`w-4 h-4 shrink-0 ${
+                        activeModule === 'overview' ? 'text-blue-400' : 'text-slate-400'
+                      }`}
+                      aria-hidden="true"
+                    />
+                    <span className="text-xs font-semibold truncate">Home Page</span>
+                  </span>
+                  <span className="text-[10px] font-mono text-emerald-400 shrink-0">Live</span>
+                </button>
+
+                <div className="pt-1 pb-0.5 border-t border-slate-800" />
 
                 {visibleModules.map((mod) => {
                   const Icon = mod.icon;
@@ -1297,8 +1567,8 @@ export default function App() {
                       onClick={() => navigateTo(mod.id)}
                       className={`w-full min-h-[40px] px-2.5 py-2 rounded-lg text-left transition-colors flex items-center justify-between gap-2 ${
                         active
-                          ? 'bg-blue-600/20 border border-blue-500/60 text-white'
-                          : 'border border-transparent text-slate-300 hover:bg-slate-800/70 hover:text-white'
+                          ? 'bg-blue-600/15 border border-blue-500/50 text-white'
+                          : 'border border-transparent text-slate-300 hover:bg-slate-800 hover:text-white'
                       }`}
                     >
                       <span className="flex items-center gap-2.5 min-w-0">
@@ -1318,26 +1588,11 @@ export default function App() {
                     </button>
                   );
                 })}
-
-                <div className="pt-2 mt-2 border-t border-slate-800/80">
-                  <button
-                    type="button"
-                    onClick={() => navigateTo('overview')}
-                    className={`w-full min-h-[40px] px-2.5 py-2 rounded-lg text-left transition-colors flex items-center gap-2.5 ${
-                      activeModule === 'overview'
-                        ? 'bg-blue-600/20 border border-blue-500/60 text-white'
-                        : 'border border-transparent text-slate-400 hover:bg-slate-800/70 hover:text-slate-100'
-                    }`}
-                  >
-                    <LayoutGrid className="w-4 h-4 shrink-0 text-blue-400" aria-hidden="true" />
-                    <span className="text-xs font-medium">All Modules Deck</span>
-                  </button>
-                </div>
               </div>
 
-              <div className="p-3 border-t border-slate-800/90 text-[11px] font-mono text-slate-400 flex items-center justify-between">
+              <div className="p-3 border-t border-slate-800 text-[11px] font-mono text-slate-400 flex items-center justify-between">
                 <span>{forecasts.length} hazard feeds</span>
-                <span className="text-emerald-400">Sync Ready</span>
+                <span className="text-emerald-400">Live Sync</span>
               </div>
             </aside>
 
@@ -1345,36 +1600,86 @@ export default function App() {
             <main className="flex-1 min-w-0 overflow-y-auto px-4 sm:px-6 py-4 sm:py-5 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
               <div className="max-w-[1320px] mx-auto space-y-4">
                 {/* Workspace Title Banner */}
-                <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+                <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
                   <div className="flex items-center gap-3 min-w-0">
                     {activeMeta ? (
                       <activeMeta.icon className="w-5 h-5 text-blue-400 shrink-0" aria-hidden="true" />
                     ) : (
-                      <LayoutGrid className="w-5 h-5 text-blue-400 shrink-0" aria-hidden="true" />
+                      <Home className="w-5 h-5 text-blue-400 shrink-0" aria-hidden="true" />
                     )}
                     <div className="min-w-0">
                       <div className="text-[11px] font-mono text-slate-400">
                         {activeMeta
                           ? `NEXORA AI · Module ${activeMeta.num}`
-                          : 'NEXORA AI · Operations Hub'}
+                          : 'NEXORA AI · Real-Time Operations Hub'}
                       </div>
                       <h1 className="text-base sm:text-lg font-display font-semibold text-slate-100 truncate">
-                        {activeMeta ? activeMeta.title : 'All Operational Modules'}
+                        {activeMeta ? activeMeta.title : 'Home Page'}
                       </h1>
                     </div>
                   </div>
 
-                  {activeModule !== 'command' && (
-                    <button
-                      type="button"
-                      onClick={() => navigateTo('command')}
-                      className="min-h-[36px] px-3 py-1.5 rounded-lg border border-slate-700 bg-[#0C1322] text-xs font-medium text-slate-200 hover:bg-slate-800 inline-flex items-center gap-1.5"
-                    >
-                      <LayoutDashboard className="w-3.5 h-3.5 text-blue-400" aria-hidden="true" />
-                      <span>Command Center &amp; 3D Globe</span>
-                    </button>
-                  )}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {activeModule !== 'overview' && (
+                      <button
+                        type="button"
+                        onClick={() => navigateTo('overview')}
+                        className="min-h-[36px] px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 text-xs font-medium text-slate-200 inline-flex items-center gap-1.5 transition-colors"
+                      >
+                        <Home className="w-3.5 h-3.5 text-blue-400" aria-hidden="true" />
+                        <span>Home Page</span>
+                      </button>
+                    )}
+                    {activeModule !== 'satellite' && activeModule !== 'overview' && (
+                      <button
+                        type="button"
+                        onClick={() => navigateTo('satellite')}
+                        className="min-h-[36px] px-3 py-1.5 rounded-lg border border-sky-500/40 bg-sky-500/10 hover:bg-sky-500/20 text-xs font-medium text-sky-300 inline-flex items-center gap-1.5 transition-colors"
+                      >
+                        <Globe className="w-3.5 h-3.5 text-sky-400" aria-hidden="true" />
+                        <span>Live Satellite Stream</span>
+                      </button>
+                    )}
+                    {activeModule !== 'command' && activeModule !== 'overview' && (
+                      <button
+                        type="button"
+                        onClick={() => navigateTo('command')}
+                        className="min-h-[36px] px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 text-xs font-medium text-slate-200 inline-flex items-center gap-1.5 transition-colors"
+                      >
+                        <LayoutDashboard className="w-3.5 h-3.5 text-blue-400" aria-hidden="true" />
+                        <span>Command Center</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
+
+                {/* Admin Live Notification Strip for Pending Citizen SOS Reports */}
+                {user.role === 'administrator' && (() => {
+                  const pendingCitizenSos = incidents.filter(
+                    (inc) => getIncidentApprovalState(inc) === 'pending'
+                  );
+                  if (pendingCitizenSos.length === 0) return null;
+                  return (
+                    <div className="px-4 py-2.5 rounded-xl border border-red-500/40 bg-red-950/40 flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-2 text-red-200 min-w-0">
+                        <Siren className="w-4 h-4 text-red-400 shrink-0" aria-hidden="true" />
+                        <span className="truncate">
+                          <strong className="text-white">{pendingCitizenSos.length} Citizen Emergency SOS</strong>{' '}
+                          {pendingCitizenSos.length === 1 ? 'report is' : 'reports are'} awaiting Admin approval before appearing on the live map.
+                        </span>
+                      </div>
+                      {activeModule !== 'response' && (
+                        <button
+                          type="button"
+                          onClick={() => navigateTo('response')}
+                          className="px-3 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold text-xs shrink-0 transition-colors"
+                        >
+                          Review &amp; Approve SOS
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* Active Module Content */}
                 <AnimatePresence mode="wait">
@@ -1386,26 +1691,41 @@ export default function App() {
                     transition={{ duration: 0.14 }}
                   >
                     {activeModule === 'overview' && (
-                      <div className="space-y-5">
-                        <div className="py-2">
-                          <NexoraLogoCenterpiece />
-                        </div>
-                        <div className="group/dock grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                          {visibleModules.map((mod) => (
-                            <ModuleLauncherCard
-                              key={mod.id}
-                              mod={mod}
-                              isOpen={false}
-                              isImageBroken={Boolean(brokenImages[mod.id])}
-                              metricLabel={getModuleMetric(mod.id)}
-                              onOpen={() => navigateTo(mod.id)}
-                              onImageError={() =>
-                                setBrokenImages((prev) => ({ ...prev, [mod.id]: true }))
-                              }
-                            />
-                          ))}
-                        </div>
-                      </div>
+                      <HomePageView
+                        user={user}
+                        clockLabel={clockLabel}
+                        dateLabel={dateLabel}
+                        forecasts={forecasts}
+                        incidents={incidents}
+                        alerts={alerts}
+                        threats={threats}
+                        resources={reliefResources}
+                        onNavigate={(id) => navigateTo(id)}
+                        onSyncLiveDisasters={() => void handleSyncUsgs(true)}
+                        moduleDeckSlot={
+                          <div
+                            className={`group/dock grid gap-3 grid-cols-1 sm:grid-cols-2 ${
+                              visibleModules.length === 9
+                                ? 'lg:grid-cols-3'
+                                : 'lg:grid-cols-3 xl:grid-cols-5'
+                            }`}
+                          >
+                            {visibleModules.map((mod) => (
+                              <ModuleLauncherCard
+                                key={mod.id}
+                                mod={mod}
+                                isOpen={false}
+                                isImageBroken={Boolean(brokenImages[mod.id])}
+                                metricLabel={getModuleMetric(mod.id)}
+                                onOpen={() => navigateTo(mod.id)}
+                                onImageError={() =>
+                                  setBrokenImages((prev) => ({ ...prev, [mod.id]: true }))
+                                }
+                              />
+                            ))}
+                          </div>
+                        }
+                      />
                     )}
 
                     {activeModule === 'command' && (
@@ -1421,6 +1741,7 @@ export default function App() {
                         reliefCount={reliefResources.length}
                         urlsScannedCount={cyberCounts.scanned}
                         phishingDetectedCount={cyberCounts.phishing}
+                        liveLocation={liveLocation}
                         onOpenModule={(id) => navigateTo(id)}
                       />
                     )}
@@ -1440,6 +1761,21 @@ export default function App() {
                         isSyncing={isSyncingUsgs}
                         syncNotice={syncNotice}
                         onOpenModule={(id) => navigateTo(id)}
+                      />
+                    )}
+
+                    {activeModule === 'satellite' && (
+                      <GoogleMapsPanel
+                        forecasts={forecasts}
+                        incidents={incidents}
+                        alerts={alerts}
+                        threats={threats}
+                        resources={reliefResources}
+                        showCyber={user.role === 'administrator'}
+                        variant="stream"
+                        initialUserLocation={liveLocation}
+                        heightClass="h-[calc(100vh-14.5rem)] min-h-[540px]"
+                        onSelectModule={(id) => navigateTo(id)}
                       />
                     )}
 
@@ -1478,6 +1814,7 @@ export default function App() {
                         alerts={alerts}
                         resources={reliefResources}
                         userRole={user.role}
+                        liveLocation={liveLocation}
                         onAdvanceStatus={handleAdvanceIncident}
                         onCreateIncident={handleCreateIncident}
                         onOpenModule={(id) => navigateTo(id)}
@@ -1554,11 +1891,21 @@ export default function App() {
         </div>
       )}
 
+      <StartupPermissionsModal
+        open={!isCheckingSession && showPermissionsModal}
+        permissions={devicePermissions}
+        liveLocation={liveLocation}
+        onUpdatePermission={handleUpdatePermission}
+        onLocationGranted={handleLocationGranted}
+        onRevokeLocation={handleRevokeLocation}
+        onClose={handleClosePermissionsModal}
+      />
+
       {toast && (
         <div
           role="status"
           aria-live="polite"
-          className="fixed top-4 right-4 left-4 sm:left-auto sm:max-w-sm z-50 px-4 py-3 rounded-lg bg-slate-900/95 text-slate-100 text-xs font-medium border border-slate-700 shadow-xl backdrop-blur-md"
+          className="fixed top-4 right-4 left-4 sm:left-auto sm:max-w-sm z-50 px-4 py-3 rounded-lg bg-slate-900 text-slate-100 text-xs font-medium border border-slate-700 shadow-lg"
         >
           {toast}
         </div>
